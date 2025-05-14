@@ -147,7 +147,7 @@ def compute_backtest_loop(weights_div_asset_price, asset_price,opens,highs,lows,
 def   compute_backtest(weights_div_asset_price,asset_price,opens,highs,lows,closes,mults,portfolio_value_usd,commision,weights,buy_trigger, sell_trigger, sell_stop_price,buy_stop_price,exchange_rate,startcash_usd,startcash,exposition_lim,pos):
 
     # Set Buy Execution Type (True -> Market, False -> Stop)
-    buy_at_market =  False
+    buy_at_market = False
 
     #Log Dict
     bt_log_dict = {}
