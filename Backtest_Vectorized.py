@@ -149,6 +149,9 @@ def   compute_backtest(weights_div_asset_price,asset_price,opens,highs,lows,clos
     # Set Buy Execution Type (True -> Market, False -> Stop)
     buy_at_market = False
 
+    # Upgrade target_size to 1 when target_size is over treshold
+    upgrade_treshold = 0.20
+
     #Log Dict
     bt_log_dict = {}
 
@@ -164,7 +167,6 @@ def   compute_backtest(weights_div_asset_price,asset_price,opens,highs,lows,clos
     target_size_raw = weights_div_asset_price.multiply(portfolio_to_invest, axis=0).fillna(0)
 
     #Upgrade target_size to 1 when target_size is over treshold
-    upgrade_treshold=0.20
     target_size_raw[target_size_raw > upgrade_treshold] = target_size_raw.clip(lower=1)
 
     #Round to get Target Number of Contracts
@@ -199,8 +201,6 @@ def   compute_backtest(weights_div_asset_price,asset_price,opens,highs,lows,clos
     is_buy=(target_trade_size>0) & exposition_is_low # & buy_trigger
     B_S.where(~is_buy, 'Buy', inplace=True)
 
-
-
     if buy_at_market:
         # Set Buy Orders as Market Orders
         exectype.where(~is_buy, 'Market', inplace=True) # Buy Order allways Market at Open Price
@@ -212,9 +212,13 @@ def   compute_backtest(weights_div_asset_price,asset_price,opens,highs,lows,clos
         buy_stop_price.clip(lower=opens, upper=None, inplace=True)
         #Set Buy Price as buy_stop_price
         prices.where(~is_buy, buy_stop_price, inplace=True)
+
+        #Exceptions
         #Set cash always to market
         if 'cash' in is_buy.columns:
             exectype['cash'].where(~is_buy['cash'], 'Market', inplace=True)
+        #Set to Market when target_trade_size==1
+        #exectype.where(~(target_trade_size==1), 'Market', inplace=True)
 
     #Sell Orders
     is_sell=(target_trade_size < 0) #& sell_trigger
