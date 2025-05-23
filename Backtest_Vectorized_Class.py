@@ -224,15 +224,24 @@ class BacktestVectorized:
         exec_size = target_trade_size.where((broker_event == 'Executed'), 0).copy()
         exec_price = order_data['prices'].where((broker_event == 'Executed'), 0).copy()
 
-        # Create execution time (similar to original implementation)
-        # First create a base time from the index
-        base_time = pd.DataFrame(index=trading_dates, columns=tickers)
-        for i, ticker in enumerate(tickers):
-            base_time[ticker] = trading_dates + pd.Timedelta(seconds=i+1)
+        # Create order time at start of the day consecutives by ticker
+        secs = np.arange(1, len(tickers) + 1)  # Start from 1, end at length of tickers (inclusive)
+        order_time_dict = {ticker: (trading_dates + pd.Timedelta(seconds=sec)) for sec, ticker in zip(secs, tickers)}
+        order_time = pd.DataFrame(order_time_dict, index=trading_dates)
+        order_time = order_time.where(event == 'Created', np.nan)
 
-        # Add 10 seconds for execution time and filter for executed orders
-        exec_time = base_time + pd.Timedelta(seconds=10)
+        # Create execution time with different timing for market, stop, and canceled orders
+        exec_time = order_time + pd.Timedelta(seconds=10)
         exec_time = exec_time.where(broker_event == 'Executed', np.nan)
+
+        # Different timing for stop orders
+        exec_time_stop = order_time + pd.Timedelta(hours=10)
+        exec_time_stop = exec_time_stop.where(broker_event == 'Executed', np.nan)
+        exec_time = exec_time.where(~(exectype == 'Stop'), exec_time_stop)
+
+        # Different timing for canceled orders
+        exec_time_cancel = order_time + pd.Timedelta(hours=23, minutes=59)
+        exec_time = exec_time.where(~(broker_event == 'Canceled'), exec_time_cancel)
 
         # Calculate trading costs
         trading_cost = exec_size.abs() * self.settings.commission
@@ -256,14 +265,14 @@ class BacktestVectorized:
         hold_returns_raw_usd = (prev_pos * hold_price_diff).sum(axis=1)
 
         # Calculate trading returns
-        trading_price_diff = (closes - execution_data['exec_price']).multiply(mults, axis=1)
-        trading_returns = execution_data['exec_size'] * trading_price_diff
+        trading_price_diff = (closes - exec_price).multiply(mults, axis=1)
+        trading_returns = exec_size * trading_price_diff
 
         # Calculate total returns
         daily_returns_usd = (
             hold_returns_raw_usd +
             trading_returns.sum(axis=1) -
-            execution_data['trading_cost'].sum(axis=1)
+            trading_cost.sum(axis=1)
         )
         daily_returns_eur = daily_returns_usd * exchange_rate
 
@@ -279,22 +288,33 @@ class BacktestVectorized:
         }
 
         # Create log dictionary
-        bt_log_dict['order_dict'] = order_data
+        bt_log_dict['order_dict'] = {
+            'date_time': order_time,
+            'event': event,
+            'pos': prev_pos,  # Start of Day Position
+            'ticker': tickers_df,
+            'B_S': B_S,
+            'exectype': exectype,
+            'size': target_trade_size,
+            'price': round(prices, 3),
+            'commission': updated_pos * 0,  # Initialize with zeros
+        }
+
         bt_log_dict['broker_dict'] = {
-            'date_time': execution_data.get('exec_time', pd.DataFrame()),
-            'event': execution_data['broker_event'],
-            'pos': execution_data['updated_pos'],
-            'ticker': order_data['tickers_df'],
-            'B_S': order_data['B_S'],
-            'exectype': order_data['exectype'],
-            'size': execution_data['exec_size'],
-            'price': execution_data['exec_price'].astype(float).round(3),
-            'commission': execution_data['trading_cost'],
+            'date_time': exec_time,
+            'event': broker_event,
+            'pos': updated_pos,
+            'ticker': tickers_df,
+            'B_S': B_S,
+            'exectype': exectype,
+            'size': exec_size,
+            'price': round(exec_price.astype(float), 3),
+            'commission': trading_cost,
         }
 
         # Add position and portfolio values
-        bt_log_dict['pos'] = execution_data['updated_pos']
-        bt_log_dict['pos_value'] = (asset_price * execution_data['updated_pos']).sum(axis=1)
+        bt_log_dict['pos'] = updated_pos
+        bt_log_dict['pos_value'] = (asset_price * updated_pos).sum(axis=1)
         bt_log_dict['portfolio_value'] = portfolio_value_usd_new
         bt_log_dict['portfolio_value_eur'] = returns_data['portfolio_value_eur']
         bt_log_dict['dayly_profit_eur'] = returns_data['daily_returns_eur']
@@ -302,8 +322,8 @@ class BacktestVectorized:
         bt_log_dict['exposition'] = bt_log_dict['pos_value'] / portfolio_to_invest
 
         return (
-            execution_data['updated_pos'],
-            returns_data['portfolio_value_usd'],
+            updated_pos,
+            portfolio_value_usd_new,
             bt_log_dict
         )
 
@@ -474,9 +494,8 @@ def create_log_history(bt_log_dict):
 
     # No need to check for date_time column as we've ensured it exists in the previous steps
 
-    # Reorder columns with date_time first, then tickers, then other columns
-    other_cols = [col for col in log_history.columns if col != 'date_time' and col not in tickers]
-    log_history = log_history[['date_time'] + list(tickers) + other_cols]
+    # Insert tickers as columns and reorder exactly as in the original implementation
+    log_history = log_history[['date_time'] + list(tickers) + list(log_history.columns[1:-len(tickers)])]
 
     # Create End of Day df
     eod_df = pd.DataFrame(index=pos.index, columns=list(log_history.columns) + ['portfolio_value', 'portfolio_value_eur', 'pos_value', 'ddn', 'dayly_profit', 'dayly_profit_eur', 'pre_portfolio_value', 'exchange_rate', 'ddn_eur'])
@@ -503,11 +522,10 @@ def create_log_history(bt_log_dict):
     # Concatenate log_history with eod_df
     log_history = pd.concat([log_history, eod_df], axis=0).sort_values(by='date_time')
 
-    # Update tickers positions
+    # Update tickers positions - do this before renaming events
     for ticker in tickers:
         is_executed = log_history['event'] == 'Executed'
         is_ticker = log_history['ticker'] == ticker
-        # Make sure we're using the correct event name after renaming
         log_history.loc[is_executed & is_ticker, ticker] = log_history.loc[is_executed & is_ticker, 'pos']
 
     log_history[tickers] = log_history[tickers].fillna(method='ffill')
@@ -516,22 +534,8 @@ def create_log_history(bt_log_dict):
     # Rename event
     event_values = ['Sell Order Created', 'Sell Order Canceled', 'Sell Order Executed', 'Buy Order Created', 'Buy Order Canceled', 'Buy Order Executed', 'End of Day']
 
-    # Map events to include 'Order' - similar to original implementation
-    event_map = {
-        ('Created', 'Sell'): 'Sell Order Created',
-        ('Canceled', 'Sell'): 'Sell Order Canceled',
-        ('Executed', 'Sell'): 'Sell Order Executed',
-        ('Created', 'Buy'): 'Buy Order Created',
-        ('Canceled', 'Buy'): 'Buy Order Canceled',
-        ('Executed', 'Buy'): 'Buy Order Executed'
-    }
-
-    # Apply mapping for events that need to be renamed
-    mask = (log_history['event'] != 'End of Day')
-    log_history.loc[mask, 'event'] = log_history.loc[mask].apply(
-        lambda row: event_map.get((row['event'], row['B_S']), row['event']), 
-        axis=1
-    )
+    # Note: In the original implementation, there's a comment about renaming events,
+    # but no actual code that does it. We're keeping the same behavior here.
 
     # Keep only date at date_time
     log_history['date'] = log_history['date_time'].dt.date
