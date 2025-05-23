@@ -20,8 +20,8 @@ warnings.filterwarnings('ignore')
 
 from WalkForwardTraining import WalkForwardTraining,get_params_from_csv
 import Market_Data_Feed as mdf
-from Backtest_Vectorized_Class import compute_backtest_vectorized
-#from Backtest_Vectorized import compute_backtest_vectorized
+#from Backtest_Vectorized_Class import compute_backtest_vectorized
+from Backtest_Vectorized import compute_backtest_vectorized
 from Training_Markowitz import process_log_data,apply_pos_constrain
 
 # Import Trading Settings
