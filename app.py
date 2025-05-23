@@ -438,7 +438,8 @@ def display_orders(log_history,settings):
     cols[0].write(f"**Orders to Broker:**")
 
     # Get Today SELL Stops Log
-    orders_history = log_history[log_history['event'].str.contains('Order Created')]  # [['date','event','ticker','size','price']]
+    #orders_history = log_history[log_history['event'].str.contains('Order Created')]  # [['date','event','ticker','size','price']]
+    orders_history = log_history[log_history['event'].str.contains('Created')]  # [['date','event','ticker','size','price']]
     today = datetime.date.today()
     #today = datetime.datetime.strptime('2023-07-20', '%Y-%m-%d').date()
     today_orders = orders_history.loc[orders_history['date'] == today]
@@ -462,3 +463,7 @@ def display_orders(log_history,settings):
 
 if __name__ == '__main__':
     main(settings)
+
+
+
+
