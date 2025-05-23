@@ -452,29 +452,8 @@ def create_log_history(bt_log_dict):
     broker_dict = {ticker: broker_dict[ticker].reset_index(drop=True) for ticker in tickers}
 
     # Concatenate order_dict with broker_dict
-    log_history_dict = {}
-    for ticker in tickers:
-        try:
-            # Check if both DataFrames have data
-            if not order_dict[ticker].empty and not broker_dict[ticker].empty:
-                # Concatenate and sort if 'date_time' column exists
-                combined_df = pd.concat([order_dict[ticker], broker_dict[ticker]], axis=0).dropna()
-                if 'date_time' in combined_df.columns:
-                    log_history_dict[ticker] = combined_df.sort_values(by='date_time')
-                else:
-                    # If 'date_time' doesn't exist, just use the concatenated DataFrame
-                    log_history_dict[ticker] = combined_df
-            elif not order_dict[ticker].empty:
-                log_history_dict[ticker] = order_dict[ticker]
-            elif not broker_dict[ticker].empty:
-                log_history_dict[ticker] = broker_dict[ticker]
-            else:
-                # Create an empty DataFrame with the same columns as would be expected
-                log_history_dict[ticker] = pd.DataFrame(columns=['date_time', 'event', 'ticker', 'B_S', 'exectype', 'size', 'price', 'commission'])
-        except Exception as e:
-            print(f"Warning: Error processing log history for ticker {ticker}: {str(e)}")
-            # Create an empty DataFrame with the same columns as would be expected
-            log_history_dict[ticker] = pd.DataFrame(columns=['date_time', 'event', 'ticker', 'B_S', 'exectype', 'size', 'price', 'commission'])
+    # Use the same approach as in the original implementation
+    log_history_dict = {ticker: pd.concat([order_dict[ticker], broker_dict[ticker]], axis=0).dropna().sort_values(by='date_time') if 'date_time' in pd.concat([order_dict[ticker], broker_dict[ticker]], axis=0).columns else pd.concat([order_dict[ticker], broker_dict[ticker]], axis=0).dropna() for ticker in tickers}
 
     # Concatenate all tickers
     try:
@@ -487,19 +466,15 @@ def create_log_history(bt_log_dict):
         log_history = pd.DataFrame(columns=['date_time', 'event', 'ticker', 'B_S', 'exectype', 'size', 'price', 'commission'])
 
     # Insert tickers as columns
-    try:
-        # Add ticker columns if they don't exist
-        for ticker in tickers:
-            if ticker not in log_history.columns:
-                log_history[ticker] = np.nan
+    log_history[tickers] = np.nan
 
-        # Reorder columns if date_time exists
-        if 'date_time' in log_history.columns:
-            # Get columns that are not tickers and not date_time
-            other_cols = [col for col in log_history.columns if col != 'date_time' and col not in tickers]
-            log_history = log_history[['date_time'] + list(tickers) + other_cols]
-    except Exception as e:
-        print(f"Warning: Error reordering log history columns: {str(e)}")
+    # Ensure date_time column exists
+    if 'date_time' not in log_history.columns:
+        log_history['date_time'] = pd.NaT
+
+    # Reorder columns with date_time first, then tickers, then other columns
+    other_cols = [col for col in log_history.columns if col != 'date_time' and col not in tickers]
+    log_history = log_history[['date_time'] + list(tickers) + other_cols]
 
     # Create End of Day df
     eod_df = pd.DataFrame(index=pos.index, columns=list(log_history.columns) + ['portfolio_value', 'portfolio_value_eur', 'pos_value', 'ddn', 'dayly_profit', 'dayly_profit_eur', 'pre_portfolio_value', 'exchange_rate', 'ddn_eur'])
@@ -534,6 +509,28 @@ def create_log_history(bt_log_dict):
 
     log_history[tickers] = log_history[tickers].fillna(method='ffill')
     log_history[tickers] = log_history[tickers].astype(int)
+
+    # Rename events to include 'Order'
+    conditions = [
+        (log_history['event'] == 'Created') & (log_history['B_S'] == 'Sell'),
+        (log_history['event'] == 'Canceled') & (log_history['B_S'] == 'Sell'),
+        (log_history['event'] == 'Executed') & (log_history['B_S'] == 'Sell'),
+        (log_history['event'] == 'Created') & (log_history['B_S'] == 'Buy'),
+        (log_history['event'] == 'Canceled') & (log_history['B_S'] == 'Buy'),
+        (log_history['event'] == 'Executed') & (log_history['B_S'] == 'Buy')
+    ]
+
+    values = [
+        'Sell Order Created',
+        'Sell Order Canceled',
+        'Sell Order Executed',
+        'Buy Order Created',
+        'Buy Order Canceled',
+        'Buy Order Executed'
+    ]
+
+    # Apply the conditions to rename events
+    log_history['event'] = np.select(conditions, values, default=log_history['event'])
 
     # Keep only date at date_time
     log_history['date'] = log_history['date_time'].dt.date
