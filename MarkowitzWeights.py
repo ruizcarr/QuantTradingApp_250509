@@ -92,6 +92,6 @@ def mkwtz_opt_fun(x, CAGR, covariance_matrix,volatility_target):
     returns_x = np.dot(CAGR.T, x)
     penalties_x = np.where(volatility_x > volatility_target, volatility_x /volatility_target-1, 0)
 
-    opt_fun = volatility_x - returns_x + penalties_x
+    opt_fun = volatility_x  - returns_x + penalties_x
 
     return opt_fun

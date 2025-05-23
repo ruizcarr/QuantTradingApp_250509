@@ -9,7 +9,7 @@ from datetime import timedelta
 from utils import weighted_mean_of_dfs_dict
 #from namespace import Namespace
 
-from Backtest_Vectorized import compute_backtest_vectorized
+from Backtest_Vectorized_Class import compute_backtest_vectorized
 import Market_Data_Feed as mdf
 
 np.random.seed(1234)
@@ -480,7 +480,6 @@ def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
     cagr_xs_df = returns_xs_df.rolling(cagr_w, min_periods=week).mean().fillna(0.0001) * year
     dict['cagr_xs'] = np.array(cagr_xs_df)
 
-
     # Get Function to minimize
     use_normalized=True
 
@@ -509,7 +508,8 @@ def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
     else:
 
         dict['risk_xs'] = dict['volatility_xs'] * 0.5 + dict['ddn_xs_std']*1.5 + dict['volat_xs_std'] * 0.15
-        dict['opt_fun_xs'] = dict['risk_xs'] - dict['cagr_xs'] + dict['penalties_xs']
+
+        dict['opt_fun_xs'] = dict['risk_xs'] *risk_aversion - dict['cagr_xs'] + dict['penalties_xs']
 
     return dict
 

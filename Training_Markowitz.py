@@ -15,7 +15,7 @@ pd.set_option('display.width', None)
 import warnings
 warnings.filterwarnings('ignore')
 
-from Backtest_Vectorized import compute_backtest_vectorized
+from Backtest_Vectorized_Class import compute_backtest_vectorized
 from Markowitz_Vectorized import compute_optimized_markowitz_d_w_m
 from WalkForwardTraining import WalkForwardTraining
 import Market_Data_Feed as mdf
@@ -84,7 +84,7 @@ def run(settings):
 
     #Apply Exposition Constraints
     #Exponential factor,Mult factor & Limit maximum/minimum individual position
-    if settings['apply_pos_consraints']:
+    if settings['apply_pos_constraints']:
         positions = apply_pos_constrain(positions,settings )
 
 
