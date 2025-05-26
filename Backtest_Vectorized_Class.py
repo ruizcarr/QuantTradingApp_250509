@@ -168,7 +168,7 @@ class BacktestVectorized:
         tickers_df.loc[:, :] = tickers
 
         # Process buy orders
-        is_buy = (target_trade_size > 0) & exposition_is_low
+        is_buy = (target_trade_size > 0) & exposition_is_low & buy_trigger
         B_S.where(~is_buy, 'Buy', inplace=True)
 
         if not self.settings.buy_at_market:
@@ -364,7 +364,7 @@ def compute_backtest_vectorized(
     closes = closes.loc[start:]
 
     # Get Buy/Sell Triggers & Stop Prices
-    buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(positions, lows, highs)
+    buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(positions,closes, lows, highs)
 
     # mult dict to list in the tickers order - optimize by using list comprehension
     mults_array = np.array([mults[tick] for tick in closes.columns])
@@ -434,34 +434,72 @@ def compute_out_of_backtest_loop(closes, weights, mults):
     return weights_div_asset_price, asset_price
 
 
-def compute_buy_sell_triggers(weights, lows, highs):
+def compute_buy_sell_triggers(weights, closes,lows, highs):
     """Calculate buy/sell triggers and stop prices."""
-    # Weights Uptrend --> Yesterday low > previous 3 days lowest
-    weights_min = weights.shift(2).rolling(5).min()
+    # Weights Uptrend --> Yesterday low > previous 5 days lowest
+    weights_min = weights.shift(1).rolling(5).min()
     weights_up = weights.shift(1).gt(weights_min, axis=0)
 
     # Lows Uptrend --> Yesterday low > previous 5 days lowest
     lows_min = lows.shift(1).rolling(5).min()
     lows_up = lows.shift(1).ge(lows_min, axis=0)
 
+    # Closes Uptrend
+    if False:
+        closes_mean_fast=closes.shift(1).rolling(5).mean()
+        closes_mean_slow=closes.shift(1).rolling(22).mean()
+        closes_up_fast=closes_mean_fast.shift(1).gt(closes_mean_slow.shift(4))
+        closes_up_slow=closes_mean_slow.shift(1).gt(closes_mean_slow.shift(4))
+        closes_mean_crosed_up=closes_mean_fast.mean().ge(closes_mean_slow)
+        closes_uptrend=  closes_up_fast & closes_up_slow #& closes_mean_crosed_up #
+
     # Highs Downtrend --> Yesterday high < previous 5 days highest
     highs_max = highs.shift(2).rolling(5).max()
     highs_dn = (highs.shift(1)).le(highs_max, axis=0)
 
     # Buy Trigger
-    buy_trigger = lows_up & weights_up
+
+    buy_trigger = weights_up & lows_up #& closes_uptrend
 
     # Sell Trigger
     sell_trigger = highs_dn  # Highs Downtrend
 
+    #Fibonacci Stop Price
+    #fibonacci_38=lows_min + (highs_max - lows_min) * 0.38
+    fibonacci_62 = lows_min + (highs_max - lows_min) * 0.62
+
     # Get Sell Stop Price
     low_keep = lows_min.rolling(22).max()
     sell_stop_price = low_keep
+    #sell_stop_price = fibonacci_38
 
     # Get Buy Stop Price
-    high_keep = highs_max.rolling(22).min()
-    highs_std = highs.rolling(22).std().shift(1)
-    buy_stop_price = high_keep + highs_std * 0.5
+    #high_keep = highs_max.rolling(22).min()
+    #highs_std = highs.rolling(22).std().shift(1)
+    #buy_stop_price = high_keep + highs_std * 0.5
+    #buy_stop_price = highs_max + highs_std * 0.0
+    #buy_stop_price = highs*0
+    buy_stop_price= fibonacci_62
+
+    #Debug Plot
+    debug=False
+    if debug:
+        plot_df=pd.DataFrame()
+        ticker='CL=F'
+        plot_df['high']=highs[ticker]
+        plot_df['high_max']=highs_max[ticker]
+        plot_df['lows_min'] = lows_min[ticker]
+        #plot_df['high_keep'] = high_keep[ticker]
+        plot_df['buy_stop_price'] = buy_stop_price[ticker]
+        #plot_df['closes_uptrend'] = closes_uptrend[ticker]
+        plot_df['weights_up'] = weights_up[ticker]
+        plot_df['buy_trigger'] = buy_trigger[ticker]
+
+
+        plot_df.tail(200).plot(title=ticker)
+
+        print(plot_df[:-4].tail(5))
+
 
     return buy_trigger, sell_trigger, sell_stop_price, buy_stop_price
 

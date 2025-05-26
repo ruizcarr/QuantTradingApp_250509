@@ -233,6 +233,12 @@ def apply_pos_constrain(positions,settings ):
         available_cash = 1 - futures_guaranties
         positions['cash'] = positions['cash'].clip(upper=available_cash)
 
+    #Apply CL=F Penalties
+    if 'CL=F' in positions.columns:
+        positions['CL=F']=positions['CL=F']/2
+        #positions['CL=F'] = positions['CL=F'].clip(upper=0.1)
+
+
     return positions
 
 
