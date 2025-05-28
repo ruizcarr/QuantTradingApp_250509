@@ -67,6 +67,7 @@ class Strategy:
         if settings['apply_strategy_weights']:
             # Apply RSI and other additional Strategy Weights on top of Markowitz weights
             positions=self.ApplyStrategyWeights(self.weights_df,indicators_dict['comb_weights'])
+
         else:
             positions=self.weights_df.copy()
 

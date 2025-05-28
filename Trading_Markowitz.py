@@ -20,8 +20,8 @@ warnings.filterwarnings('ignore')
 
 from WalkForwardTraining import WalkForwardTraining,get_params_from_csv
 import Market_Data_Feed as mdf
-from Backtest_Vectorized_Class import compute_backtest_vectorized
-#from Backtest_Vectorized import compute_backtest_vectorized
+#from Backtest_Vectorized_Class import compute_backtest_vectorized
+from Backtest_Vectorized import compute_backtest_vectorized
 from Training_Markowitz import process_log_data,apply_pos_constrain
 
 # Import Trading Settings
@@ -54,8 +54,6 @@ def compute(settings,data_ind):
     #Exponential factor,Mult factor & Limit maximum/minimum individual position
     if settings['apply_pos_constraints']:
         positions = apply_pos_constrain(positions,settings )
-
-
 
     #Cash BackTest with Backtrader
     if settings['do_BT'] :
