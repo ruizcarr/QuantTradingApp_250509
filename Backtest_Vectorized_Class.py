@@ -437,7 +437,7 @@ def compute_out_of_backtest_loop(closes, weights, mults):
 def compute_buy_sell_triggers(weights, closes,lows, highs):
     """Calculate buy/sell triggers and stop prices."""
     # Weights Uptrend --> Yesterday low > previous 5 days lowest
-    weights_min = weights.shift(1).rolling(5).min()
+    weights_min = weights.shift(2).rolling(5).min()
     weights_up = weights.shift(1).gt(weights_min, axis=0)
 
     # Lows Uptrend --> Yesterday low > previous 5 days lowest
@@ -458,28 +458,30 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
     highs_dn = (highs.shift(1)).le(highs_max, axis=0)
 
     # Buy Trigger
-
-    buy_trigger = weights_up & lows_up #& closes_uptrend
+    buy_trigger = lows_up & weights_up
 
     # Sell Trigger
     sell_trigger = highs_dn  # Highs Downtrend
 
-    #Fibonacci Stop Price
-    #fibonacci_38=lows_min + (highs_max - lows_min) * 0.38
-    fibonacci_62 = lows_min + (highs_max - lows_min) * 0.62
 
     # Get Sell Stop Price
     low_keep = lows_min.rolling(22).max()
     sell_stop_price = low_keep
+    #Fibonacci Stop Price
+    #fibonacci_38=lows_min + (highs_max - lows_min) * 0.38
     #sell_stop_price = fibonacci_38
 
     # Get Buy Stop Price
-    #high_keep = highs_max.rolling(22).min()
-    #highs_std = highs.rolling(22).std().shift(1)
-    #buy_stop_price = high_keep + highs_std * 0.5
-    #buy_stop_price = highs_max + highs_std * 0.0
-    #buy_stop_price = highs*0
-    buy_stop_price= fibonacci_62
+    fibo=False
+    if fibo:
+        # Fibonacci Stop Price
+        fibonacci_62 = lows_min + (highs_max - lows_min) * 0.62
+        buy_stop_price = fibonacci_62
+    else:
+        # Min of last month highs_min
+        high_keep = highs_max.rolling(22).min()
+        highs_std = highs.rolling(22).std().shift(1)
+        buy_stop_price = high_keep + highs_std * 0.5
 
     #Debug Plot
     debug=False
