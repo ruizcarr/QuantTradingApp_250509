@@ -94,7 +94,7 @@ def main(settings):
         #Debug
         #st.write(st.session_state)
         #st.write(settings['end'])
-        st.write(closes.head())
+        st.write(closes.tail())
         #st.write(returns)
 
         #Process Log Data
