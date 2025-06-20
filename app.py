@@ -87,16 +87,14 @@ def main(settings):
 
         # Load data & Compute
         data, log_history = load_and_compute_data(settings)
-        #returns = data.tickers_returns
+        returns = data.tickers_returns
         closes = data.tickers_closes
-
-        returns = closes.pct_change()
-
 
         #Debug
         #st.write(st.session_state)
         #st.write(settings['end'])
         #st.write(closes.tail(10))
+        # returns = closes.pct_change()
         #st.write(returns)
 
         #Process Log Data
