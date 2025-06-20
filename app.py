@@ -89,6 +89,7 @@ def main(settings):
         data, log_history = load_and_compute_data(settings)
         #returns = data.tickers_returns
         closes = data.tickers_closes
+
         returns = closes.pct_change()
 
 
