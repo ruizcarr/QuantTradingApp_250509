@@ -69,7 +69,7 @@ def main(settings):
             """
             Fetches raw data and performs computation, with results cached.
             """
-            st.write("Fetching and computing data...")
+            #st.write("Fetching and computing data...")
             data_ind = mdf.Data_Ind_Feed(settings).data_ind
             data, _ = data_ind
 
@@ -94,7 +94,7 @@ def main(settings):
         #Debug
         #st.write(st.session_state)
         #st.write(settings['end'])
-        #st.write(closes)
+        st.write(closes)
         #st.write(returns)
 
         #Process Log Data
