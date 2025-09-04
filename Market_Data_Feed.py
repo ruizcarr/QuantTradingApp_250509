@@ -81,7 +81,8 @@ class Data:
 
         #Add Next Days for Trading
         if add_days>0:
-            self.add_next_days_random_pct(add_days)
+            #self.add_next_days_random_pct(add_days)
+            self.add_next_days_same_value(add_days)
 
         # Get Close Prices from data_bundle in the order of tickers
         #self.tickers_closes = pd.DataFrame(data=np.asarray([self.data_bundle[tic, 'Close'] for tic in tickers]).T, columns=tickers, index=self.data_bundle.index)
@@ -440,6 +441,38 @@ class Data:
                         except Exception as e:
                             print(f"Error assigning {close_val} to {row_index}, {col}: {e}")
 
+        self.data_bundle = pd.concat([self.data_bundle, future_df])
+
+    def add_next_days_same_value(self, num_future_days):
+        """
+        Extends self.data_bundle with future days
+        where each new day just repeats the last available values.
+        """
+
+        if not isinstance(self.data_bundle.index, pd.DatetimeIndex):
+            raise ValueError("self.data_bundle index must be a DatetimeIndex.")
+
+        if len(self.data_bundle) == 0:
+            raise ValueError("self.data_bundle must contain at least 1 row.")
+
+        last_business_day = self.data_bundle.index[-1]
+        future_dates = pd.bdate_range(
+            start=last_business_day,
+            periods=num_future_days + 1,
+            inclusive="right"
+        )
+
+        # Take last row values
+        last_values = self.data_bundle.iloc[-1]
+
+        # Repeat same row across new dates
+        future_df = pd.DataFrame(
+            [last_values.values] * num_future_days,
+            index=future_dates,
+            columns=self.data_bundle.columns
+        )
+
+        # Concatenate with existing data
         self.data_bundle = pd.concat([self.data_bundle, future_df])
 
     def data_dict_sanitize_OHL(self, data_dict):
