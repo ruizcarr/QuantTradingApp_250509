@@ -84,6 +84,7 @@ def compute_backtest_vectorized(weights, settings, data_dict):
             quantstats.reports.html(q_returns, title=q_title,benchmark=q_benchmark,benchmark_title=q_benchmark_ticker,output=q_filename) #
             webbrowser.open(q_filename)
 
+
         return bt_log_dict,log_history
 
 def compute_backtest_loop_OK(weights_div_asset_price, asset_price,opens,highs,lows,closes,mults,

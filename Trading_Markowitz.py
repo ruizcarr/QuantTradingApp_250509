@@ -119,6 +119,16 @@ def compute(settings,data_ind):
 
             #cum_ret_by_ticker.plot(title='cum_ret_by_ticker')
 
+    #Save log_history
+
+    # Creates the correct path for your OS
+    import os
+    folder_name = 'results'
+    csv_filename = 'trading_log_history.csv'
+    full_path = os.path.join(folder_name, csv_filename)  # Creates the correct path for your OS
+
+    #Save log_history to csv
+    log_history.to_csv(full_path, index=False)
 
 
     if settings['verbose']:
@@ -184,4 +194,4 @@ def process_log_data_duplicated(log_history,settings):
 
 if __name__ == '__main__':
     data_ind = mdf.Data_Ind_Feed(settings).data_ind
-    compute(settings,data_ind)
+    log_history,positions=compute(settings,data_ind)

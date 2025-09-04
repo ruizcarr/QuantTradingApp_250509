@@ -175,7 +175,14 @@ class Data:
         # Retrive data_bundle from csv and update if exist
         if os.path.isfile(self.db_file):
             data = pd.read_csv(self.db_file, header=[0,1], index_col=0)
-            data.index = pd.to_datetime(data.index)
+
+            # Ensure index is datetime
+            data.index = pd.to_datetime(data.index, errors='coerce', infer_datetime_format=True)
+
+            # Drop rows with invalid or missing dates
+            data = data[~data.index.isna()]
+
+            #data.index = pd.to_datetime(data.index)
 
         #Update csv file data
         updated_data_bundle= pd.concat([data, data_bundle])
@@ -452,6 +459,10 @@ class Data:
             hl_diff_is_zero = (data['Low'] - data['High']).abs() < 0.00000001
             data.loc[hl_diff_is_zero, 'High'] = data[['Open', 'Close']].max(axis=1)
             data.loc[hl_diff_is_zero, 'Low'] = data[['Open', 'Close']].min(axis=1)
+
+            #Replace Adj Close NaN by Close
+            adj_close_is_nan=data['Adj Close'].isna()
+            data.loc[adj_close_is_nan, 'Adj Close'] = data['Close']
 
             # Update data_dict
             data_dict[ticker] = data

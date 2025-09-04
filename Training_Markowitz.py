@@ -119,6 +119,21 @@ def run(settings):
     end = time.time()
     times['backtrader'] =  round(end - start,3)
 
+
+    # Creates the correct path for your OS
+    import os
+    folder_name = 'results'
+    csv_filename = 'training_log_history.csv'
+    full_path = os.path.join(folder_name, csv_filename)  # Creates the correct path for your OS
+    #Save log_history to csv
+    log_history.to_csv(full_path, index=False)
+
+    # Save positions to csv
+    csv_filename = 'training_positions.csv'
+    full_path = os.path.join(folder_name, csv_filename)  # Creates the correct path for your OS
+    # Save log_history to csv
+    positions.to_csv(full_path) #, index=False
+
     # endregion & TRADING
 
     #region Prints
