@@ -124,6 +124,7 @@ class Data:
 
         # Ensure tz-naive
         #self.tickers_closes.index = pd.to_datetime(self.tickers_closes.index, utc=True).tz_convert(None)
+        #
 
         # -----------------------------
         # 6️⃣ Add Cash (EURIBOR)
