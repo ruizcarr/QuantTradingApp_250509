@@ -39,7 +39,8 @@ def compute(settings,data_ind):
     #data, indicators_dict =mdf.Data_Ind_Feed(settings).data_ind
     #tickers_returns = data.tickers_returns
     #data_dict=data.data_dict
-
+    print("Closes",data.tickers_closes.iloc[:-5].tail())
+    print("Returns", data.tickers_returns.iloc[:-5].tail())
 
     # Get Trained Optimized Parameters from csv File
     wft = WalkForwardTraining(data_ind, settings)

@@ -107,13 +107,14 @@ class Data:
 
         #Sanitize tz
         for k, df in self.data_dict.items():
-            df.index = pd.to_datetime(df.index, utc=True).tz_convert(None)
+            df.index = pd.to_datetime(df.index, utc=True).tz_convert(None).normalize()
             self.data_dict[k] = df
 
         # -----------------------------
         # 4b️⃣ Extend with historical CSVs if needed
         # -----------------------------
         self.extended_data(self.data_dict, settings['start'])
+
 
         # -----------------------------
         # 5️⃣ Create tickers_closes
@@ -122,7 +123,7 @@ class Data:
         self.tickers_closes = pd.DataFrame(closes)
 
         # Ensure tz-naive
-        self.tickers_closes.index = pd.to_datetime(self.tickers_closes.index, utc=True).tz_convert(None)
+        #self.tickers_closes.index = pd.to_datetime(self.tickers_closes.index, utc=True).tz_convert(None)
 
         # -----------------------------
         # 6️⃣ Add Cash (EURIBOR)
