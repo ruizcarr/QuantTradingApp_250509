@@ -107,7 +107,15 @@ def main(settings):
         today = datetime.datetime.now().date()
 
         #Display Title & tickers data
-        display_tickers_data(closes,returns,today,settings,sidebar=False,daysback=st.session_state.daysback,data_show=st.session_state.data_show,chart=False)
+        display_tickers_data(
+            closes,
+            returns,
+            settings,
+            sidebar=False,
+            daysback=st.session_state.daysback,
+            data_show=st.session_state.data_show,
+            chart=False
+        )
 
         st.divider()
 
@@ -357,92 +365,85 @@ def display_tickers_data_nok(closes,returns,today,settings,sidebar=False,daysbac
                     chart_ts_altair(chart_data, ticker)
 
 def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22, data_show='returns', chart=True):
-    """
-    Display tickers' market data and charts in Streamlit.
-    Handles last valid trading day, cumulative returns, and optional sidebar display.
-    """
-
     import pytz
     import datetime
     import streamlit as st
+    import altair as alt
 
     tickers = settings["tickers"]
     n_col = len(tickers) + 1
     col_width_list = [7] + [3] * (n_col - 1)
     cols = st.columns(col_width_list)
 
-    # Get current time for display
+    # -----------------------------
+    # Get today's date in fixed timezone
     tz = pytz.timezone('Europe/Madrid')
-    now = datetime.datetime.now(tz)
-    time_string = now.strftime('%H:%M:%S')
+    today = datetime.datetime.now(tz).date()
 
-    # Determine last valid trading day in the data
-    last_data_day = closes.loc[closes.index.date <= now.date()].index.max()
-    market_data_head_1 = f"**Market Data: {last_data_day.date()} {time_string}**"
-    market_data_head_2 = "(data with 15min delay)"
+    # Filter closes/returns for today
+    today_closes = closes[closes.index.date == today]
+    today_returns = returns[returns.index.date == today]
 
-    def get_chart_data(data, daysback=6, data_show='returns'):
-        # Clip to last valid trading day
-        data_ch = data.loc[:last_data_day].iloc[-daysback:]
+    # If market is closed today, fallback to last available day <= today
+    if today_closes.empty:
+        last_day = closes.index[closes.index.date <= today][-1].date()
+        today_closes = closes[closes.index.date == last_day]
+        today_returns = returns[returns.index.date == last_day]
+        today = last_day
 
-        # Calculate cumulative returns if needed
+    # -----------------------------
+    # Header
+    time_string = datetime.datetime.now(tz).strftime('%H:%M:%S')
+    market_data_head_1 = f"**Market Data: {today} {time_string}**"
+    market_data_head_2 = f"(data with 15min delay)"
+
+    # -----------------------------
+    # Helper: cumulative returns for chart
+    def get_chart_data(data, daysback=5, data_show='returns'):
+        data_ch = data.iloc[-daysback:]
         if data_show == 'returns':
-            chart_data = (1 + data_ch.pct_change()).cumprod().fillna(1)
-        else:
-            chart_data = data_ch
+            cum_ret_ch = (1 + data_ch.pct_change()).cumprod().fillna(1)
+            return cum_ret_ch
+        return data_ch
 
-        return chart_data
+    chart_data = get_chart_data(closes, daysback=daysback, data_show=data_show)
 
-    # Loop over tickers to display metrics and charts
+    # -----------------------------
+    # Display each ticker
     for i, ticker in enumerate(tickers):
-        close = closes.loc[:last_data_day, ticker].iloc[-1]
-        ret = returns.loc[:last_data_day, ticker].iloc[-1]
+        close = today_closes[ticker].iloc[-1]
+        ret = today_returns[ticker].iloc[-1]
 
-        # Format display values
+        # Format close
         if ticker == 'EURUSD=X':
             close_f = f"{close:,.3f}"
         elif ticker == 'CL=F':
             close_f = f"{close:,.2f}"
-        elif ticker == 'cash':
-            ret = ret * 255  # For EURIBOR display
-            close_f = f"{close:,.0f}"
         else:
             close_f = f"{close:,.0f}"
 
-        delta = f"{ret:.1%}" if ticker != 'cash' else f"@ {ret:.1%} EURIBOR"
-        label = f"**{ticker}**"
+        delta = f"{ret:.1%}"
+        if ticker == 'cash':
+            delta = f"@ {ret*255:.1%} EURIBOR"
 
-        if not sidebar:
-            # Display header in first column
-            if i == 0:
-                cols[0].title("Quant Trading App")
-                cols[0].write(market_data_head_1)
-                cols[0].write(market_data_head_2)
+        # Display header in first column
+        if i == 0:
+            cols[0].title('Quant Trading App')
+            cols[0].write(market_data_head_1)
+            cols[0].write(market_data_head_2)
 
-            # Display metric
-            cols[i + 1].metric(label, close_f, delta)
+        # Display ticker metric
+        cols[i + 1].metric(f"**{ticker}**", close_f, delta)
 
-            # Display chart if requested
-            if chart:
-                chart_data = get_chart_data(closes, daysback, data_show)
-                with cols[i + 1]:
-                    chart_ts_altair(chart_data, ticker)
-
-        else:
-            # Sidebar display
-            if i == 0:
-                with st.sidebar:
-                    st.title("Quant Trading App")
-                    st.write(market_data_head_1)
-                    st.write(market_data_head_2)
-                    chart_data = get_chart_data(closes, daysback, data_show)
-
-            with st.sidebar:
-                scol1, scol2 = st.columns([2, 3])
-                scol1.metric(label, close_f, delta)
-                if chart:
-                    with scol2:
-                        chart_ts_altair(chart_data, ticker)
+        # Display chart
+        if chart:
+            with cols[i + 1]:
+                df_chart = chart_data[[ticker]].rename_axis('date').reset_index()
+                alt_chart = alt.Chart(df_chart, height=120).mark_line(color="blue").encode(
+                    x=alt.X('date', title=''),
+                    y=alt.Y(ticker, title='', scale=alt.Scale(domain=[df_chart[ticker].min(), df_chart[ticker].max()]))
+                )
+                st.altair_chart(alt_chart, use_container_width=True)
 
 
 def display_orders_ok(log_history,settings):
