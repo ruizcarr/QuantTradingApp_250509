@@ -64,7 +64,7 @@ def main(settings):
         #closes=data.tickers_closes
         #returns=data.tickers_returns
 
-        @st.cache_data(ttl=3600)  # Cache for 1 hour (adjust as needed)
+        #@st.cache_data(ttl=3600)  # Cache for 1 hour (adjust as needed)
         def load_and_compute_data(settings):
             """
             Fetches raw data and performs computation, with results cached.
