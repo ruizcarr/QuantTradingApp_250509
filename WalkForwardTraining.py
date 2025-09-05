@@ -53,39 +53,52 @@ class WalkForwardTraining:
         self.path_train = "trained_models/"
         self.path_test = self.path_train
         self.p_file = self.path_train + 'params_train.csv'
-        self.tt_windows = self.TrainTestWindows(self.tickers_returns,wft_print=False)
+        self.tt_windows = self.TrainTestWindows(self.tickers_returns,wft_print=True)
         #self.params_train =self.get_params_train(data_ind,self.tt_windows, settings)
 
-    def TrainTestWindows(self,tickers_returns,wft_print=True):
-        train_len=self.settings['train_length'] #Lookback of data for training
-        test_len=self.settings['test_length'] #  Period 'W-FRI','M','Q','Y'
-        train_len_min=self.settings['train_length_min'] # Min Lookback of data for training
+    def TrainTestWindows(self, tickers_returns, wft_print=True):
+        train_len = self.settings['train_length']  # Lookback for training
+        test_len = self.settings['test_length']  # Period 'W-FRI', 'M', 'Q', 'Y'
+        train_len_min = self.settings['train_length_min']  # Minimum lookback for training
+
         tt_windows = pd.DataFrame()
-        # Get endoftrain as tickers_returns date  > train_len_min keepping last day of resample
-        #Convert index to datetime index before resample
-        tickers_returns.index=pd.to_datetime(tickers_returns.index)
+
+        # Ensure datetime index
+        tickers_returns.index = pd.to_datetime(tickers_returns.index)
+
+        # Resample to test period and get end-of-train dates
         tickers_returns_res = tickers_returns.iloc[train_len_min:].resample(test_len).last()
         tt_windows['endoftrain'] = tickers_returns_res.index[:-1]
-        # Start train always at first startoftrain date
-        tt_windows['startoftrain'] = tickers_returns[: tt_windows['endoftrain'].iloc[0]].iloc[-train_len:].index[0]
-        # Keep maximum date beetween train_len & train_len_min
-        tt_windows['startoftrain'] = [tickers_returns[: endoftrain].iloc[-train_len:].index[0] for endoftrain in tt_windows.endoftrain]
-        tt_windows['startoftest'] = [tickers_returns.index[tickers_returns.index > tt_windows['endoftrain'].iloc[i]][0]
-                                     for i in range(len(tt_windows))]
+
+        # Compute start-of-train for each window
+        tt_windows['startoftrain'] = [
+            tickers_returns[:endoftrain].iloc[-train_len:].index[0]
+            for endoftrain in tt_windows['endoftrain']
+        ]
+
+        # Compute start-of-test as the first date after end-of-train
+        tt_windows['startoftest'] = pd.to_datetime([
+            tickers_returns.index[tickers_returns.index > tt_windows['endoftrain'].iloc[i]][0]
+            for i in range(len(tt_windows))
+        ])
+
+        # Ensure strictly increasing start-of-test to avoid duplicates
+        tt_windows['startoftest'] = tt_windows['startoftest'].cummax()
+
+        # End-of-test from resampled periods
         tt_windows['endoftest'] = tickers_returns_res.index[1:]
 
-        tt_windows=tt_windows[['startoftrain','endoftrain','startoftest','endoftest']]
-
+        # Keep proper column order
+        tt_windows = tt_windows[['startoftrain', 'endoftrain', 'startoftest', 'endoftest']]
 
         if wft_print:
             print('\n WalkForwardTraining Windows')
-            print('start',tickers_returns.index[0].date())
+            print('start', tickers_returns.index[0].date())
             print('end', tickers_returns.index[-1].date())
-            print('train_length', train_len,'train_len_min',train_len_min)
+            print('train_length', train_len, 'train_len_min', train_len_min)
             print('test_length', test_len)
-            print('Test Starts after:',tickers_returns.index[train_len_min].date())
+            print('Test Starts after:', tickers_returns.index[train_len_min].date())
             print(tt_windows)
-
 
         return tt_windows
 
@@ -483,6 +496,10 @@ class WalkForwardTraining:
             return
 
         #Upsample post_factor to dayly
+
+        print("startoftest duplicates?", self.tt_windows['startoftest'].duplicated().any())
+        print(self.tt_windows['startoftest'][self.tt_windows['startoftest'].duplicated()])
+
         post_factor = pd.DataFrame({'post_factor': np.array(params_train['post_factor'])}, index=self.tt_windows['startoftest'])
         post_factor = post_factor.reindex(self.tickers_returns.index).fillna(method='ffill').dropna()
 
@@ -496,6 +513,7 @@ class WalkForwardTraining:
         # Get Test Weights, Positions & Returns
         st = Strategy(st_settings, self.tickers_returns, indicators_dict)
         self.st=st
+
         test_weights = st.weights_df[startoftest:endoftest]
         test_positions = st.positions[startoftest:endoftest]
         test_returns = st.strategy_returns[startoftest:endoftest]

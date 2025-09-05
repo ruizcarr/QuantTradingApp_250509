@@ -55,6 +55,8 @@ def compute(settings,data_ind):
     if settings['apply_pos_constraints']:
         positions = apply_pos_constrain(positions,settings )
 
+    print("positions",positions)
+
     #Cash BackTest with Backtrader
     if settings['do_BT'] :
         if verbose: print('\nCash BackTest with Backtrader ')

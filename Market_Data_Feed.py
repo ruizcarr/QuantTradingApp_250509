@@ -4,6 +4,8 @@ import pandas as pd
 #import pandas_ta as ta
 import os.path
 
+import pytz
+
 import ta  # Make sure you have installed the 'ta' library (pip install ta)
 from ta.volatility import BollingerBands
 from ta.momentum import rsi # Import the specific rsi function
@@ -49,105 +51,124 @@ class Data_Ind_Feed:
         #Get Data , Indicators Dict tuple
         self.data_ind=(data,ind.indicators_dict)
 
-
 class Data:
-    def __init__(self,settings, tickers=['ES=F'], start='2003-12-01', end=(date.today() + timedelta(days=1)).isoformat(),add_days=0,offline=False):
+    def __init__(self, settings, tickers=['ES=F'], start='2003-12-01',
+                 end=(date.today() + timedelta(days=1)).isoformat(),
+                 add_days=0, offline=False):
 
-        #self.yf_data(tickers, start, end,add_days)
+        self.path = "datasets/"
+        self.db_file = os.path.join(self.path, 'data_bundle.csv')
 
-        #print(self.data_bundle)
-
-        self.path = "datasets/" #"datasets\\"
-        self.db_file = self.path + 'data_bundle.csv'
-
+        # -----------------------------
+        # 1️⃣ Load or download data_bundle
+        # -----------------------------
         if not offline:
-
-            #Get Data Bundle from yahoo finance
             self.yf_data_bundle(tickers, start, end, add_days)
 
-        elif offline & os.path.isfile(self.db_file):
-
-            # Read data_bundle from csv
-            data = pd.read_csv(self.db_file, header=[0,1], index_col=0)
-            data.index = pd.to_datetime(data.index)
-            #data.sort_index(inplace=True)
-            #Keep only data from start on settings
-            self.data_bundle=data[start:]
-
+        elif offline and os.path.isfile(self.db_file):
+            self.data_bundle = pd.read_csv(self.db_file, header=[0,1], index_col=0)
+            self.data_bundle.index = pd.to_datetime(self.data_bundle.index, errors='coerce')
+            self.data_bundle = self.data_bundle[~self.data_bundle.index.isna()]
+            self.data_bundle = self.data_bundle.sort_index()
         else:
-            print('Off-Line and not File with Saved Data available')
+            raise FileNotFoundError("Offline mode and no saved CSV available")
 
+        # -----------------------------
+        # 2️⃣ Sanitize data_bundle
+        # -----------------------------
+        # Remove duplicate indices
+        self.data_bundle = self.data_bundle[~self.data_bundle.index.duplicated(keep='first')]
 
+        # Remove tz if tz-aware
+        if self.data_bundle.index.tz is not None:
+            self.data_bundle.index = self.data_bundle.index.tz_convert(None)
 
-        #Add Next Days for Trading
-        if add_days>0:
-            #self.add_next_days_random_pct(add_days)
+        # Forward/backward fill missing data
+        self.data_bundle = self.data_bundle.sort_index()
+        self.data_bundle = self.data_bundle.ffill().bfill()
+
+        # Ensure numeric
+        self.data_bundle = self.data_bundle.apply(pd.to_numeric, errors='coerce')
+        self.data_bundle = self.data_bundle.ffill().bfill()
+
+        # -----------------------------
+        # 3️⃣ Add next days if requested
+        # -----------------------------
+        if add_days > 0:
             self.add_next_days_same_value(add_days)
 
-        # Get Close Prices from data_bundle in the order of tickers
-        #self.tickers_closes = pd.DataFrame(data=np.asarray([self.data_bundle[tic, 'Close'] for tic in tickers]).T, columns=tickers, index=self.data_bundle.index)
-        #self.tickers_closes = pd.concat([self.data_bundle[tic, 'Close'] for tic in tickers], axis=1)
+        # -----------------------------
+        # 4️⃣ Pack into data_dict
+        # -----------------------------
+        self.data_dict = {}
+        for tick in settings['tickers']:
+            if tick in self.data_bundle.columns:
+                self.data_dict[tick] = self.data_bundle[tick].copy()
 
-        # Save data to dictionary for further use
-        self.data_dict = {
-            tick: self.data_bundle[tick]
-            for tick in settings['tickers']
-            if tick in self.data_bundle.columns  # Check if ticker exists!
-        }
+        #Sanitize tz
+        for k, df in self.data_dict.items():
+            df.index = pd.to_datetime(df.index, utc=True).tz_convert(None)
+            self.data_dict[k] = df
 
-        if start < self.data_bundle.index[0].isoformat():  # if start requested is older than available data
-            self.extended_data(self.data_dict, start)
+        # -----------------------------
+        # 4b️⃣ Extend with historical CSVs if needed
+        # -----------------------------
+        self.extended_data(self.data_dict, settings['start'])
 
-        #Get tickers_closes from dict
-        closes={}
-        for ticker, df in self.data_dict.items():
-            closes[ticker] = df['Close']
-        self.tickers_closes =pd.DataFrame(closes)
+        # -----------------------------
+        # 5️⃣ Create tickers_closes
+        # -----------------------------
+        closes = {tick: df['Close'] for tick, df in self.data_dict.items()}
+        self.tickers_closes = pd.DataFrame(closes)
 
-        #Add Cash
-        if settings['add_cash']:
-            #self.tickers_closes['cash']=get_cash_values(self.tickers_closes.index, settings['cash_rate'], cash_init=1000)
-            euribor_df=get_euribor_1y_daily().reindex(self.tickers_closes.index, method="ffill")
-            self.tickers_closes['cash'] =1000*(1+euribor_df['Euribor']/255).cumprod()
+        # Ensure tz-naive
+        self.tickers_closes.index = pd.to_datetime(self.tickers_closes.index, utc=True).tz_convert(None)
 
-            df=list(self.data_dict.values())[0].copy()
-            for col in df.columns:
-                 df[col] = self.tickers_closes['cash']
-            self.data_dict['cash']= df
+        # -----------------------------
+        # 6️⃣ Add Cash (EURIBOR)
+        # -----------------------------
+        if settings.get('add_cash', False):
+            euribor_df = get_euribor_1y_daily().reindex(self.tickers_closes.index, method="ffill")
+            self.tickers_closes['cash'] = 1000 * (1 + euribor_df['Euribor'] / 255).cumprod()
 
+            # Add cash to data_dict
+            df_cash = list(self.data_dict.values())[0].copy()
+            for col in df_cash.columns:
+                df_cash[col] = self.tickers_closes['cash']
+            self.data_dict['cash'] = df_cash
+
+
+        # -----------------------------
+        # 7️⃣ Compute returns
+        # -----------------------------
         self.tickers_returns = self.tickers_closes.pct_change().fillna(0)
 
-        # Replace returns values of futures at expiration_dates by cash returns where available
-        # Create Quarterly Trading Calendar and save for further use
-        #self.q_calendar = get_es_trading_calendar(self.tickers_returns, expiration_freq='Q')
-        #fut_cash_tickers_dict={'ES=F': '^GSPC', 'NQ=F': '^NDX'}
-        #self.tickers_returns = replace_fut_by_cash_returns_at_q_exp_or_after_dates(self.tickers_returns, fut_cash_tickers_dict,self.q_calendar,offline)
 
-        # Apply Contango at ticker returns
-        #contango = [1 - contangos[ticker] / 100 / 252 if ticker in contangos else 1 for ticker in tickers]
-        #self.tickers_returns = self.tickers_returns.multiply(contango, axis=1)
+        # -----------------------------
+        # 8️⃣ Sanitize Open, High, Low
+        # -----------------------------
+        self.data_dict_sanitize_OHL()
 
-        # Sanitize Open, High & Low
-        self.data_dict_sanitize_OHL(self.data_dict)
 
-        # Get Tickers Returns in EUR
-
-        # Get historical of Exchange Rate EUR/USD (day after)
+        # -----------------------------
+        # 9️⃣ Exchange rate and EUR returns
+        # -----------------------------
         if "EURUSD=X" in self.tickers_closes.columns:
             exchange_rate = 1 / self.tickers_closes["EURUSD=X"].shift(1).fillna(method='bfill')
         else:
-            # Get EURUSD=X
+            exchange_rate = 1.0
             print("No EURUSD=X available")
-
         self.exchange_rate = exchange_rate
 
-        # Get Tickers Returns in EUR
         tickers_closes_eur = self.tickers_closes.multiply(self.exchange_rate, axis='index')
         self.tickers_returns_eur = tickers_closes_eur.pct_change().fillna(0)
 
+        # -----------------------------
+        # 10 Final Sanity Check
+        # -----------------------------
+        self.final_sanity_check(verbose=False)
 
-
-    def yf_data_bundle(self, tickers, start, end,add_days=0):
+    def yf_data_bundle_tz_isue(self, tickers, start, end,add_days=0):
         """"Get Closes & Returns from yahoo finance
                 Save OHLC to tickers dict"""
 
@@ -196,7 +217,49 @@ class Data:
         #Save for further use
         self.data_bundle = data_bundle
 
-    def extended_data(self, data_dict, start):
+    def yf_data_bundle(self, tickers, start, end, add_days=0):
+        """Get OHLC data from Yahoo Finance and store in self.data_bundle."""
+
+        tickers_space_sep = " ".join(tickers)
+
+        data_bundle = yf.download(
+            tickers_space_sep,
+            start=start,
+            end=end,
+            group_by="ticker",
+            progress=False
+        ).dropna()
+
+
+        if len(data_bundle) == 0:
+            raise ValueError("self.data_bundle is empty. Error at yahoo download")
+
+        # Normalize index (force tz-naive)
+        data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
+
+        # Drop duplicates
+        data_bundle = data_bundle.drop_duplicates()
+
+        # Merge with existing file if exists
+        if os.path.isfile(self.db_file):
+            data = pd.read_csv(self.db_file, header=[0, 1], index_col=0)
+
+            data.index = pd.to_datetime(data.index, utc=True).tz_convert(None)
+            data = data[~data.index.isna()]
+
+            updated_data_bundle = pd.concat([data, data_bundle])
+            updated_data_bundle = updated_data_bundle.loc[~updated_data_bundle.index.duplicated(keep="first")]
+            updated_data_bundle = updated_data_bundle.sort_index()
+        else:
+            updated_data_bundle = data_bundle
+
+        # Save merged data
+        updated_data_bundle.to_csv(self.db_file)
+
+        # Keep for later use
+        self.data_bundle = data_bundle
+
+    def extended_data_OK(self, data_dict, start):
         """Extend with  Historical Data if requested """
         aka_dict = {'ES=F': '^GSPC', 'NQ=F': '^NDX', 'GC=F': 'GOLD', 'EURUSD=X': 'EURUSD', 'CL=F': 'OIL'}
         tickers = list(data_dict.keys())
@@ -259,6 +322,71 @@ class Data:
 
         self.data_dict = e_data_dict
         self.tickers_closes = e_closes
+
+    def extended_data(self, data_dict, start):
+        """
+        Extend with historical data if requested.
+        Only extends if 'start' is before available Yahoo data.
+        """
+        aka_dict = {'ES=F': '^GSPC', 'NQ=F': '^NDX', 'GC=F': 'GOLD',
+                    'EURUSD=X': 'EURUSD', 'CL=F': 'OIL'}
+        tickers = list(data_dict.keys())
+
+        # Identify historical tickers
+        h_tickers = []
+        for tick in tickers:
+            if tick in aka_dict.keys():
+                h_tickers.append(aka_dict[tick])
+            elif tick in aka_dict.values():
+                h_tickers.append(tick)
+            else:
+                print(f"{tick} has no historical data file available!")
+
+        # Load historical CSV data
+        self.data_from_csv(h_tickers)
+        h_data_dict = self.data_dict_csv
+
+        # Determine earliest date from Yahoo data
+        yahoo_start = max(min(df.index) for df in data_dict.values())
+
+        # Only extend if 'start' is before Yahoo start
+        if pd.to_datetime(start) >= yahoo_start:
+            # No extension needed
+            return
+
+        # Determine earliest date to take from historical CSVs
+        h_date_0 = max(pd.to_datetime(start), min(min(df.index) for df in h_data_dict.values()))
+
+        e_data_dict = {}
+        #e_closes = pd.DataFrame()
+
+        for i, tick in enumerate(tickers):
+            h_tick = h_tickers[i]
+            h_data_tick = h_data_dict[h_tick].copy()
+            data_tick = data_dict[tick].copy()
+
+            # Slice historical data between h_date_0 and yahoo_start
+            h_data_tick = h_data_tick.loc[(h_data_tick.index >= h_date_0) & (h_data_tick.index < yahoo_start)]
+
+            # Ensure indices align
+            if i == 0:
+                idx_0 = h_data_tick.index
+            else:
+                h_data_tick = h_data_tick.reindex(idx_0).ffill()
+
+            # Concatenate historical + Yahoo data
+            e_data_tick = pd.concat([h_data_tick, data_tick])
+            e_data_dict[tick] = e_data_tick
+
+            # Build closes DataFrame
+            #s = e_data_tick['Close'].rename(tick)
+            #e_closes = pd.concat([e_closes, s], axis=1)
+
+        #e_closes.index = pd.to_datetime(e_closes.index)
+        self.data_dict = e_data_dict
+        #self.tickers_closes = e_closes
+
+
 
     def repair_data(self, data, tick):
 
@@ -329,6 +457,9 @@ class Data:
             else:
                 print(self.path+tick + '.csv', 'do not exist !')
         closes_csv.index = pd.DatetimeIndex(closes_csv.index)
+        #Reset tz
+        closes_csv.index = closes_csv.index.tz_localize(None)
+
         self.returns_csv = closes_csv.pct_change().fillna(0)
         self.closes_csv = closes_csv
         self.data_dict_csv = data_dict_csv
@@ -443,66 +574,202 @@ class Data:
 
         self.data_bundle = pd.concat([self.data_bundle, future_df])
 
-    def add_next_days_same_value(self, num_future_days):
+    def add_next_days_same_value(self, num_future_days, tz="Europe/Madrid"):
         """
         Extends self.data_bundle with future days
-        where each new day just repeats the last available values.
+        repeating the last available values.
         """
-
         if not isinstance(self.data_bundle.index, pd.DatetimeIndex):
             raise ValueError("self.data_bundle index must be a DatetimeIndex.")
 
         if len(self.data_bundle) == 0:
             raise ValueError("self.data_bundle must contain at least 1 row.")
 
-        last_business_day = self.data_bundle.index[-1]
+        # Get last known business day in local timezone
+        last_business_day = self.data_bundle.index[-1].tz_localize(None)
+
+        # Force business days in your timezone
+        local_tz = pytz.timezone(tz)
         future_dates = pd.bdate_range(
             start=last_business_day,
             periods=num_future_days + 1,
             inclusive="right"
-        )
+        ).tz_localize(local_tz)
 
-        # Take last row values
+        # Repeat last values
         last_values = self.data_bundle.iloc[-1]
-
-        # Repeat same row across new dates
         future_df = pd.DataFrame(
             [last_values.values] * num_future_days,
             index=future_dates,
             columns=self.data_bundle.columns
         )
 
-        # Concatenate with existing data
         self.data_bundle = pd.concat([self.data_bundle, future_df])
 
-    def data_dict_sanitize_OHL(self, data_dict):
+    def data_dict_sanitize_OHL(self):
+        """
+        Sanitize OHLC dataframes in self.data_dict.
+        Instead of truncating at earliest common period, keep full range and just fix NaNs.
+        """
+        new_dict = {}
+        for t, df in self.data_dict.items():
+            df = df.copy()
 
-        for ticker in data_dict.keys():
-            # Get Ticker Data from Dict with OHLC for each ticker
-            data = data_dict[ticker]
+            # Ensure datetime index
+            df.index = pd.to_datetime(df.index, utc=False)
+            df = df[~df.index.duplicated(keep='last')].sort_index()
 
-            # Locate where Open= Close , so Open to Close Return is Zero
-            oc_diff_is_zero = (data['Close'] - data['Open']).abs() < 0.00000001
+            # ⚠ Don't drop post-2003 rows just because Adj Close has NaNs.
+            if "Adj Close" in df.columns:
+                if df["Adj Close"].isna().any():
+                    print(f"⚠ {t}: found NaNs in Adj Close → forward/backward filling instead of dropping")
+                    df["Adj Close"] = df["Adj Close"].fillna(method="ffill").fillna(method="bfill")
 
-            # Replace Open by previous Close Where oc_diff_is_zero
-            data.loc[oc_diff_is_zero, 'Open'] = data['Close'].shift(1)
+            # If OHLC missing, patch with Close
+            for col in ["Open", "High", "Low"]:
+                if col in df.columns and df[col].isna().any():
+                    df[col] = df[col].fillna(df["Close"])
 
-            # Replace High by max(Open,Close) where High is equal to Low
-            # Replace Low by min(Open,Close)
-            hl_diff_is_zero = (data['Low'] - data['High']).abs() < 0.00000001
-            data.loc[hl_diff_is_zero, 'High'] = data[['Open', 'Close']].max(axis=1)
-            data.loc[hl_diff_is_zero, 'Low'] = data[['Open', 'Close']].min(axis=1)
+            new_dict[t] = df
 
-            #Replace Adj Close NaN by Close
-            adj_close_is_nan=data['Adj Close'].isna()
-            data.loc[adj_close_is_nan, 'Adj Close'] = data['Close']
+        self.data_dict = new_dict
 
-            # Update data_dict
-            data_dict[ticker] = data
+    def sanity_check_data(self):
+        """
+        Sanity check for data_dict, tickers_closes, tickers_returns, tickers_returns_eur, and exchange_rate.
+        Prints duplicate index warnings and checks if all indexes are aligned.
+        """
+        print("\n✅ Data Sanity Check:")
 
-        self.data_dict = data_dict
+        # Helper to check duplicates
+        def check_duplicates(df, name):
+            if df.index.duplicated().any():
+                print(f"⚠️ Duplicate index found in {name}")
+            else:
+                print(f"✔ {name} index OK")
 
-        return data_dict
+        # Check data_dict
+        for tick, df in self.data_dict.items():
+            check_duplicates(df, f"data_dict[{tick}]")
+
+        # Check main dataframes/series
+        check_duplicates(self.tickers_closes, "tickers_closes")
+        check_duplicates(self.tickers_returns, "tickers_returns")
+        check_duplicates(self.tickers_returns_eur, "tickers_returns_eur")
+        if isinstance(self.exchange_rate, pd.Series):
+            check_duplicates(self.exchange_rate, "exchange_rate")
+
+        # Check alignment of all indexes
+        all_indexes = [df.index for df in self.data_dict.values()] + [
+            self.tickers_closes.index,
+            self.tickers_returns.index,
+            self.tickers_returns_eur.index,
+            self.exchange_rate.index if isinstance(self.exchange_rate, pd.Series) else pd.Index([])
+        ]
+
+        if all(all_indexes[0].equals(idx) for idx in all_indexes[1:]):
+            print("✔ All indexes are aligned")
+        else:
+            print("⚠️ Index mismatch detected between data_dict, tickers_returns, tickers_returns_eur, exchange_rate")
+
+    def align_all_indexes(self):
+        """
+        Aligns all DataFrames/Series to the same index (intersection of all indexes)
+        and removes duplicates.
+        """
+        print("\n🔧 Aligning all data indexes...")
+
+        # Remove duplicates first
+        for tick, df in self.data_dict.items():
+            df = df[~df.index.duplicated(keep='first')]
+            self.data_dict[tick] = df
+
+        # Determine common index (intersection of all)
+        common_index = self.tickers_closes.index
+        for df in self.data_dict.values():
+            common_index = common_index.intersection(df.index)
+        common_index = common_index.intersection(self.tickers_returns.index)
+        common_index = common_index.intersection(self.tickers_returns_eur.index)
+        if isinstance(self.exchange_rate, pd.Series):
+            common_index = common_index.intersection(self.exchange_rate.index)
+
+        # Reindex everything to common_index
+        for tick, df in self.data_dict.items():
+            self.data_dict[tick] = df.reindex(common_index)
+
+        self.tickers_closes = self.tickers_closes.reindex(common_index)
+        self.tickers_returns = self.tickers_returns.reindex(common_index)
+        self.tickers_returns_eur = self.tickers_returns_eur.reindex(common_index)
+        if isinstance(self.exchange_rate, pd.Series):
+            self.exchange_rate = self.exchange_rate.reindex(common_index)
+
+        print(f"✔ All data aligned to {len(common_index)} rows")
+
+    def final_sanity_check(self, verbose=True):
+        """
+        Sanitize and align all internal data:
+        - Remove duplicate dates
+        - Convert all indexes to tz-naive
+        - Remove invalid dates (NaT)
+        - Sort indexes
+        - Forward/backward fill missing values
+        - Align all DataFrames/Series to a common index
+        """
+        common_index = None
+        for tick, df in self.data_dict.items():
+            df.index = pd.to_datetime(df.index, errors='coerce', utc=True)
+            df.index = df.index.tz_convert(None)
+            df = df[~df.index.duplicated(keep='first')]
+            df = df[~df.index.isna()]
+            df = df.sort_index()
+            df = df.apply(pd.to_numeric, errors='coerce').ffill().bfill()
+            self.data_dict[tick] = df
+
+            if common_index is None:
+                common_index = df.index
+            else:
+                common_index = common_index.intersection(df.index)
+
+        common_index = common_index[~common_index.isna()]
+
+        # Tickers closes
+        self.tickers_closes.index = pd.to_datetime(self.tickers_closes.index, errors='coerce', utc=True).tz_convert(None)
+        self.tickers_closes = self.tickers_closes[~self.tickers_closes.index.duplicated(keep='first')]
+        self.tickers_closes = self.tickers_closes.loc[self.tickers_closes.index.notna()]
+        self.tickers_closes = self.tickers_closes.loc[self.tickers_closes.index.intersection(common_index)]
+
+        # Returns
+        self.tickers_returns = self.tickers_closes.pct_change().fillna(0)
+        self.tickers_returns = self.tickers_returns[~self.tickers_returns.index.duplicated(keep='first')]
+
+        # EUR returns
+        tickers_closes_eur = self.tickers_closes.multiply(self.exchange_rate, axis='index')
+        self.tickers_returns_eur = tickers_closes_eur.pct_change().fillna(0)
+        self.tickers_returns_eur = self.tickers_returns_eur[~self.tickers_returns_eur.index.duplicated(keep='first')]
+
+        # Exchange rate
+        if isinstance(self.exchange_rate, pd.Series):
+            self.exchange_rate.index = pd.to_datetime(self.exchange_rate.index, errors='coerce', utc=True).tz_convert(None)
+            self.exchange_rate = self.exchange_rate[~self.exchange_rate.index.duplicated(keep='first')]
+            self.exchange_rate = self.exchange_rate.loc[self.exchange_rate.index.notna()]
+            self.exchange_rate = self.exchange_rate.loc[self.exchange_rate.index.intersection(self.tickers_closes.index)]
+        elif isinstance(self.exchange_rate, pd.DataFrame):
+            self.exchange_rate.index = pd.to_datetime(self.exchange_rate.index, errors='coerce', utc=True).tz_convert(None)
+            self.exchange_rate = self.exchange_rate[~self.exchange_rate.index.duplicated(keep='first')]
+            self.exchange_rate = self.exchange_rate.loc[self.exchange_rate.index.notna()]
+            self.exchange_rate = self.exchange_rate.loc[self.exchange_rate.index.intersection(self.tickers_closes.index)]
+
+        if verbose:
+            print("🔧 Running final data sanity check...")
+            for tick, df in self.data_dict.items():
+                print(f"✔ data_dict[{tick}] index OK, {len(df)} rows")
+            print(f"✔ tickers_closes index OK, {len(self.tickers_closes)} rows")
+            print(f"✔ tickers_returns index OK, {len(self.tickers_returns)} rows")
+            print(f"✔ tickers_returns_eur index OK, {len(self.tickers_returns_eur)} rows")
+            print(f"✔ exchange_rate index OK, {len(self.exchange_rate)} rows")
+            print(f"✔ All data aligned to {len(self.tickers_closes)} rows")
+            print("✅ Final data sanity check passed.")
+
 
 def replace_fut_by_cash_returns_at_q_exp_or_after_dates(tickers_returns, fut_cash_tickers_dict,calendar,offline=False):
 
@@ -1349,7 +1616,7 @@ def get_yearly_dict_rolling_bull_prob_around_expiration_dates(tickers_returns,ca
         ticker_rolling_bull_prob_weight = pd.DataFrame(index=ticker_p_value.index, columns=ticker_p_value.columns)
 
         for m in ticker_p_value.columns:
-            ts=ticker_p_value[m]#.shift(1).dropna() #Avoid last year to keep out of sample
+            ts=ticker_p_value[m].dropna()#.shift(1) #Avoid last year to keep out of sample
             #Get Time Series Consistency
             ts_is_consistent, r2_value, std, model = time_series_consistency(ts, std_lim=0.10, r2_lim=0.65)
 
@@ -1714,7 +1981,6 @@ def download_data_ticker_by_ticker(tickers_list, start_date, end_date, delay_sec
         status_message += "No tickers processed."
 
     return consolidated_data, status_message
-
 
 
 

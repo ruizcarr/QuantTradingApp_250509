@@ -337,6 +337,18 @@ def compute_backtest_vectorized(
         data_dict: Dict
 ) -> Tuple[pd.DataFrame, Dict]:
     """Main entry point for vectorized backtest computation."""
+
+    # Determine common index between positions and all tickers in data_dict
+    common_index = positions.index
+    for df in data_dict.values():
+        common_index = common_index.intersection(df.index)
+
+    # Reindex positions and all OHLCs to this common index
+    positions = positions.reindex(common_index).fillna(0)
+
+    for tick, df in data_dict.items():
+        data_dict[tick] = df.reindex(common_index).fillna(method='ffill')
+
     # Data from settings
     mults = settings['mults']
     startcash = settings['startcash']
@@ -412,8 +424,11 @@ def compute_backtest_vectorized(
         path = "results\\"
         q_filename = os.path.abspath(path + q_title + '.html')
         q_returns = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-settings['add_days']]
+        q_returns.index = pd.to_datetime(q_returns.index, utc=True).tz_convert(None)
+
         q_benchmark_ticker = 'ES=F'
         q_benchmark = (closes[q_benchmark_ticker] * exchange_rate).pct_change().iloc[:-settings['add_days']]
+        q_benchmark.index = pd.to_datetime(q_benchmark.index, utc=True).tz_convert(None)
 
         import quantstats_lumi as quantstats
         quantstats.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker, output=q_filename)
@@ -578,6 +593,7 @@ def create_log_history(bt_log_dict):
     # but no actual code that does it. We're keeping the same behavior here.
 
     # Keep only date at date_time
+    log_history['date_time'] = pd.to_datetime(log_history['date_time'], errors='coerce')
     log_history['date'] = log_history['date_time'].dt.date
 
     return log_history

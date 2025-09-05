@@ -4,6 +4,7 @@ with open('training_settings.json', 'r') as f:
     training_settings = json.load(f)
 """
 import json
+import os
 
 def get_path():
     return "config/" #"config/json_files/" #config\\json_files\\
@@ -11,7 +12,7 @@ def get_path():
 
 def settings_to_JASON (settings):
 
-    path = get_path()
+    #path = get_path()
 
     #from config.settings import settings
     #settings=settings.get_settings()
@@ -22,7 +23,7 @@ def settings_to_JASON (settings):
         json.dump(settings, f)
 
 
-def retrieve_training_settings():
+def retrieve_training_settings_nok():
 
     path = get_path()
 
@@ -33,3 +34,9 @@ def retrieve_training_settings():
 
 
     return settings
+
+def retrieve_training_settings():
+    base_dir = os.path.dirname(__file__)  # directory where utils.py lives (config/)
+    file_path = os.path.join(base_dir, "training_settings.json")
+    with open(file_path, "r") as f:
+        return json.load(f)
