@@ -608,7 +608,7 @@ class Data:
 
         self.data_bundle = pd.concat([self.data_bundle, future_df])
 
-    def data_dict_sanitize_OHL(self):
+    def data_dict_sanitize_OHL(self,verbose=False):
         """
         Sanitize OHLC dataframes in self.data_dict.
         Instead of truncating at earliest common period, keep full range and just fix NaNs.
@@ -621,11 +621,12 @@ class Data:
             df.index = pd.to_datetime(df.index, utc=False)
             df = df[~df.index.duplicated(keep='last')].sort_index()
 
-            # ⚠ Don't drop post-2003 rows just because Adj Close has NaNs.
-            if "Adj Close" in df.columns:
-                if df["Adj Close"].isna().any():
-                    print(f"⚠ {t}: found NaNs in Adj Close → forward/backward filling instead of dropping")
-                    df["Adj Close"] = df["Adj Close"].fillna(method="ffill").fillna(method="bfill")
+            if verbose:
+                # ⚠ Don't drop post-2003 rows just because Adj Close has NaNs.
+                if "Adj Close" in df.columns:
+                    if df["Adj Close"].isna().any():
+                        print(f"⚠ {t}: found NaNs in Adj Close → forward/backward filling instead of dropping")
+                        df["Adj Close"] = df["Adj Close"].fillna(method="ffill").fillna(method="bfill")
 
             # If OHLC missing, patch with Close
             for col in ["Open", "High", "Low"]:

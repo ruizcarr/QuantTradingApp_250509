@@ -53,7 +53,7 @@ class WalkForwardTraining:
         self.path_train = "trained_models/"
         self.path_test = self.path_train
         self.p_file = self.path_train + 'params_train.csv'
-        self.tt_windows = self.TrainTestWindows(self.tickers_returns,wft_print=True)
+        self.tt_windows = self.TrainTestWindows(self.tickers_returns,wft_print=False)
         #self.params_train =self.get_params_train(data_ind,self.tt_windows, settings)
 
     def TrainTestWindows(self, tickers_returns, wft_print=True):
@@ -496,10 +496,6 @@ class WalkForwardTraining:
             return
 
         #Upsample post_factor to dayly
-
-        print("startoftest duplicates?", self.tt_windows['startoftest'].duplicated().any())
-        print(self.tt_windows['startoftest'][self.tt_windows['startoftest'].duplicated()])
-
         post_factor = pd.DataFrame({'post_factor': np.array(params_train['post_factor'])}, index=self.tt_windows['startoftest'])
         post_factor = post_factor.reindex(self.tickers_returns.index).fillna(method='ffill').dropna()
 
