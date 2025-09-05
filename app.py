@@ -79,11 +79,12 @@ def main(settings):
             # Return all necessary outputs that you want to cache together
             return data, log_history
 
-        if st.button("Refresh App"):
-            #st.session_state.data = None  # Clear the data
-            # Clear the cache for the load_and_process_all_data function
-            load_and_compute_data.clear()
-            st.rerun()  # Rerun the app to call the function again and get fresh data
+        if False:
+            if st.button("Refresh App"):
+                #st.session_state.data = None  # Clear the data
+                # Clear the cache for the load_and_process_all_data function
+                load_and_compute_data.clear()
+                st.rerun()  # Rerun the app to call the function again and get fresh data
 
         # Load data & Compute
         data, log_history = load_and_compute_data(settings)
@@ -104,7 +105,8 @@ def main(settings):
         ret_by_ticker = returns[settings['tickers']] * eod_log_history[settings['tickers']]
 
         #Get today
-        today = datetime.datetime.now().date()
+        tz = pytz.timezone('Europe/Madrid')
+        today = datetime.datetime.now(tz).date()
 
         #Display Title & tickers data
         display_tickers_data(
@@ -141,7 +143,7 @@ def main(settings):
                 display_portfolio_positions(eod_log_history,trading_history,next_trade_date,settings,ret_by_ticker,returns,forecast=True)
 
         #Display Current Portfolio Value
-        display_portfolio_results(eod_log_history,today,settings,daysback=st.session_state.daysback)
+        display_portfolio_results(eod_log_history,settings,daysback=st.session_state.daysback)
 
         #Input Display Options
         with st.expander('Display Options:'):
@@ -169,6 +171,69 @@ def main(settings):
 
 def get_daysback(chart_len_dict):
     st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
+
+def display_portfolio_positions_nok(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,daysback=3*22+1,forecast=False):
+
+    st.write(f"**Portfolio Positions:**")
+    if not forecast:
+        today = datetime.datetime.now().date()
+
+    else:
+        today=None
+
+    #Get portfolio and trading of today
+    last_portfolio = eod_log_history.loc[:today].iloc[-1][settings['tickers']]
+    pre_portfolio = eod_log_history.loc[:today].iloc[-2][settings['tickers']]
+    last_trade = last_portfolio-pre_portfolio
+
+    #Position & Portfolio Value at end of Today in USD and EUR
+
+    pos_value_today=eod_log_history.loc[:today,'pos_value'].iloc[-1]
+    #porfolio_value_today = eod_log_history.loc[:today, 'portfolio_value'].iloc[-1]
+    porfolio_value_today_eur = eod_log_history.loc[:today, 'portfolio_value_eur'].iloc[-1]
+
+    exchange_rate=eod_log_history.loc[:today, 'exchange_rate'].iloc[-1]
+    pos_value_today_eur=pos_value_today*exchange_rate
+    exposition = pos_value_today_eur / porfolio_value_today_eur * 100
+
+    #Display Current Portfolio
+    n_col=len(settings["tickers"])+1
+    #col_width_list=[2]+[1]*(n_col-1)
+    col_width_list = [7] + [3] * (n_col - 1)
+    cols=st.columns(col_width_list)
+
+    with cols[0]:
+        st.write("Tickers:")
+        st.write("Nbr of Contracts:")
+        st.write(f"Last Trade date: {date}")
+        st.write(f"Position Value / Exposition @: {today}")
+        #st.subheader(f"{pos_value_today:,.0f} USD /  {exposition:,.0f} %")
+        st.subheader(f"{pos_value_today_eur:,.0f} € /  {exposition:,.0f} %")
+
+
+
+    for i in range(1,n_col):
+        j=i-1
+        ticker=trading_history.columns[j]
+        label=f"**{ticker}**"
+        value=int(last_portfolio[j])
+        delta=int(last_trade[j])
+        cols[i].metric(label=label,value=value,delta=delta)
+
+        #Chart weights evolution
+
+        with cols[i]:
+            w=daysback #3*22
+            if daysback > 6:
+                chart_ts_altair(eod_log_history.iloc[-w:].loc[:today], ticker)
+
+            if not forecast:
+                cum_ret_by_ticker = (1 + ret_by_ticker.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
+                #cum_ret_by_ticker = cum_ret_by_ticker.fillna(1)
+                cum_ret = (1 + returns.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
+                alt_chart1=chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
+                alt_chart2 = chart_ts_altair(cum_ret,  ticker, color="grey", st_altair_chart=False)
+                st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
 
 def display_portfolio_positions(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,daysback=3*22+1,forecast=False):
 
@@ -233,7 +298,8 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
                 alt_chart2 = chart_ts_altair(cum_ret,  ticker, color="grey", st_altair_chart=False)
                 st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
 
-def display_portfolio_results(eod_log_history,today,settings,daysback=3*22):
+
+def display_portfolio_results_NOK(eod_log_history,today,settings,daysback=3*22):
 
     st.write(f"**Portfolio Results:**")
 
@@ -266,6 +332,44 @@ def display_portfolio_results(eod_log_history,today,settings,daysback=3*22):
     #ddn=eod_log_history.loc[:today,"ddn"].iloc[-1]
     ddn = eod_log_history.loc[:today, "ddn_eur"].iloc[-1]
     cols[4].metric(label="**Drawdown YTD**", delta="", value=f"{ddn:.1%}")
+
+def display_portfolio_results(eod_log_history, settings, daysback=3*22):
+    st.write("**Portfolio Results:**")
+
+    # Columns layout
+    col_width_list = [3] + [2] * 4
+    cols = st.columns(col_width_list)
+
+    # Determine today in Madrid timezone
+    tz = pytz.timezone('Europe/Madrid')
+    today_date = datetime.datetime.now(tz).date()
+
+    # Find index for today, fallback to last available row
+    today_idx = eod_log_history.index[eod_log_history.index.date == today_date]
+    if len(today_idx) > 0:
+        latest_idx = today_idx[-1]
+    else:
+        latest_idx = eod_log_history.index[-1]
+
+    # Portfolio Value
+    portfolio_value_eur = eod_log_history.loc[latest_idx, "portfolio_value_eur"]
+    ret = eod_log_history.loc[latest_idx, "portfolio_return"]
+    with cols[0]:
+        st.metric(label=f"**Portfolio Value {latest_idx.date()}**", value=f"{portfolio_value_eur:,.0f} €", delta=f"{ret:.1%}")
+        # Chart Portfolio Value
+        chart_ts_altair(eod_log_history.iloc[-daysback - settings['add_days']:-settings['add_days']], "portfolio_value_eur")
+
+    # Display CAGR, weekly and monthly return
+    keys = ["cagr", "weekly_return", "monthly_return"]
+    for i, key in enumerate(keys):
+        cagr = eod_log_history.loc[latest_idx, key]
+        diff_eur = f"{cagr * portfolio_value_eur:,.0f} €"
+        cols[i + 1].metric(label=f"**{key}**", value=diff_eur, delta=f"{cagr:.1%}")
+
+    # Display Drawdown
+    ddn = eod_log_history.loc[latest_idx, "ddn_eur"]
+    cols[4].metric(label="**Drawdown YTD**", delta="", value=f"{ddn:.1%}")
+
 
 def chart_ts_altair(ts,col,color="blue",st_altair_chart=True):
     df=ts[col].rename_axis('date').reset_index()
@@ -365,85 +469,68 @@ def display_tickers_data_nok(closes,returns,today,settings,sidebar=False,daysbac
                     chart_ts_altair(chart_data, ticker)
 
 def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22, data_show='returns', chart=True):
-    import pytz
-    import datetime
-    import streamlit as st
-    import altair as alt
-
+    """
+    Display market data (closes or returns) for all tickers.
+    Always shows today's data if available, otherwise last available row.
+    """
     tickers = settings["tickers"]
     n_col = len(tickers) + 1
     col_width_list = [7] + [3] * (n_col - 1)
     cols = st.columns(col_width_list)
 
-    # -----------------------------
-    # Get today's date in fixed timezone
+    # Get today's date in Madrid timezone
     tz = pytz.timezone('Europe/Madrid')
-    today = datetime.datetime.now(tz).date()
+    today_date = datetime.datetime.now(tz).date()
 
-    # Filter closes/returns for today
-    today_closes = closes[closes.index.date == today]
-    today_returns = returns[returns.index.date == today]
-
-    # If market is closed today, fallback to last available day <= today
-    if today_closes.empty:
-        last_day = closes.index[closes.index.date <= today][-1].date()
-        today_closes = closes[closes.index.date == last_day]
-        today_returns = returns[returns.index.date == last_day]
-        today = last_day
-
-    # -----------------------------
-    # Header
+    # Header string
     time_string = datetime.datetime.now(tz).strftime('%H:%M:%S')
-    market_data_head_1 = f"**Market Data: {today} {time_string}**"
-    market_data_head_2 = f"(data with 15min delay)"
+    market_data_head_1 = f"**Market Data: {today_date} {time_string}**"
+    market_data_head_2 = "(data with 15min delay)"
 
-    # -----------------------------
-    # Helper: cumulative returns for chart
     def get_chart_data(data, daysback=5, data_show='returns'):
+        # Pick last 'daysback' rows including today
         data_ch = data.iloc[-daysback:]
-        if data_show == 'returns':
-            cum_ret_ch = (1 + data_ch.pct_change()).cumprod().fillna(1)
-            return cum_ret_ch
-        return data_ch
+        cum_ret_ch = (1 + data_ch.pct_change()).cumprod().fillna(1)
+        return cum_ret_ch if data_show == 'returns' else data_ch
 
-    chart_data = get_chart_data(closes, daysback=daysback, data_show=data_show)
-
-    # -----------------------------
-    # Display each ticker
     for i, ticker in enumerate(tickers):
-        close = today_closes[ticker].iloc[-1]
-        ret = today_returns[ticker].iloc[-1]
-
-        # Format close
-        if ticker == 'EURUSD=X':
-            close_f = f"{close:,.3f}"
-        elif ticker == 'CL=F':
-            close_f = f"{close:,.2f}"
+        # Find today's index in closes
+        today_idx = closes.index[closes.index.date == today_date]
+        if len(today_idx) > 0:
+            latest_idx = today_idx[-1]
         else:
-            close_f = f"{close:,.0f}"
+            latest_idx = closes.index[-1]  # fallback to last available row
 
-        delta = f"{ret:.1%}"
+        close_val = closes.loc[latest_idx, ticker]
+        ret_val = returns.loc[latest_idx, ticker]
+
+        # Format display values
+        if ticker == 'EURUSD=X':
+            close_fmt = f"{close_val:,.3f}"
+        elif ticker == 'CL=F':
+            close_fmt = f"{close_val:,.2f}"
+        else:
+            close_fmt = f"{close_val:,.0f}"
+
+        delta_val = f"{ret_val:.1%}"
         if ticker == 'cash':
-            delta = f"@ {ret*255:.1%} EURIBOR"
+            ret_val *= 255
+            delta_val = f"@ {ret_val:.1%} EURIBOR"
 
         # Display header in first column
         if i == 0:
-            cols[0].title('Quant Trading App')
+            cols[0].title("Quant Trading App")
             cols[0].write(market_data_head_1)
             cols[0].write(market_data_head_2)
 
-        # Display ticker metric
-        cols[i + 1].metric(f"**{ticker}**", close_f, delta)
+        # Display metrics
+        cols[i + 1].metric(label=f"**{ticker}**", value=close_fmt, delta=delta_val)
 
-        # Display chart
+        # Display small chart if enabled
         if chart:
+            chart_data = get_chart_data(closes if data_show != 'returns' else returns, daysback=daysback, data_show=data_show)
             with cols[i + 1]:
-                df_chart = chart_data[[ticker]].rename_axis('date').reset_index()
-                alt_chart = alt.Chart(df_chart, height=120).mark_line(color="blue").encode(
-                    x=alt.X('date', title=''),
-                    y=alt.Y(ticker, title='', scale=alt.Scale(domain=[df_chart[ticker].min(), df_chart[ticker].max()]))
-                )
-                st.altair_chart(alt_chart, use_container_width=True)
+                chart_ts_altair(chart_data, ticker)
 
 
 def display_orders_ok(log_history,settings):
