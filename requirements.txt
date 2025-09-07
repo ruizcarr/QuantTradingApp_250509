@@ -13,7 +13,7 @@ scikit-learn~=1.6.1
 arch==7.2.0
 joblib~=1.5.0
 ipython~=9.2.0
-pandas-ta==0.3.14b
+#pandas-ta==0.3.14b
 ta~=0.11.0
 beautifulsoup4~=4.13.4
 soupsieve~=2.7
