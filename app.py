@@ -340,34 +340,30 @@ def display_portfolio_results(eod_log_history, settings, daysback=3*22):
     col_width_list = [3] + [2] * 4
     cols = st.columns(col_width_list)
 
-    # Determine today in Madrid timezone
-    tz = pytz.timezone('Europe/Madrid')
-    today_date = datetime.datetime.now(tz).date()
-
-    # Find index for today, fallback to last available row
-    today_idx = eod_log_history.index[eod_log_history.index.date == today_date]
-    if len(today_idx) > 0:
-        latest_idx = today_idx[-1]
-    else:
-        latest_idx = eod_log_history.index[-1]
+    # Index of last real row before added future days
+    today_idx = -settings['add_days'] - 1
+    latest_row = eod_log_history.iloc[today_idx]
 
     # Portfolio Value
-    portfolio_value_eur = eod_log_history.loc[latest_idx, "portfolio_value_eur"]
-    ret = eod_log_history.loc[latest_idx, "portfolio_return"]
+    portfolio_value_eur = latest_row["portfolio_value_eur"]
+    ret = latest_row["portfolio_return"]
     with cols[0]:
-        st.metric(label=f"**Portfolio Value {latest_idx.date()}**", value=f"{portfolio_value_eur:,.0f} €", delta=f"{ret:.1%}")
+        st.metric(label=f"**Portfolio Value {latest_row.name.date()}**", value=f"{portfolio_value_eur:,.0f} €", delta=f"{ret:.1%}")
         # Chart Portfolio Value
-        chart_ts_altair(eod_log_history.iloc[-daysback - settings['add_days']:-settings['add_days']], "portfolio_value_eur")
+        chart_ts_altair(
+            eod_log_history.iloc[today_idx - daysback + 1: today_idx + 1],
+            "portfolio_value_eur"
+        )
 
     # Display CAGR, weekly and monthly return
     keys = ["cagr", "weekly_return", "monthly_return"]
     for i, key in enumerate(keys):
-        cagr = eod_log_history.loc[latest_idx, key]
+        cagr = latest_row[key]
         diff_eur = f"{cagr * portfolio_value_eur:,.0f} €"
         cols[i + 1].metric(label=f"**{key}**", value=diff_eur, delta=f"{cagr:.1%}")
 
     # Display Drawdown
-    ddn = eod_log_history.loc[latest_idx, "ddn_eur"]
+    ddn = latest_row["ddn_eur"]
     cols[4].metric(label="**Drawdown YTD**", delta="", value=f"{ddn:.1%}")
 
 
@@ -471,38 +467,32 @@ def display_tickers_data_nok(closes,returns,today,settings,sidebar=False,daysbac
 def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22, data_show='returns', chart=True):
     """
     Display market data (closes or returns) for all tickers.
-    Always shows today's data if available, otherwise last available row.
+    Always shows today's data based on 'add_days', avoiding system datetime.
     """
     tickers = settings["tickers"]
     n_col = len(tickers) + 1
     col_width_list = [7] + [3] * (n_col - 1)
     cols = st.columns(col_width_list)
 
-    # Get today's date in Madrid timezone
-    tz = pytz.timezone('Europe/Madrid')
-    today_date = datetime.datetime.now(tz).date()
+    # Use last real row before future added days
+    today_idx = -settings['add_days'] - 1
+    closes_today = closes.iloc[today_idx]
+    returns_today = returns.iloc[today_idx]
 
-    # Header string
-    time_string = datetime.datetime.now(tz).strftime('%H:%M:%S')
-    market_data_head_1 = f"**Market Data: {today_date} {time_string}**"
+    # Header string: use the index date instead of datetime.now()
+    today_date = closes.index[today_idx].date()
+    market_data_head_1 = f"**Market Data: {today_date}**"
     market_data_head_2 = "(data with 15min delay)"
 
     def get_chart_data(data, daysback=5, data_show='returns'):
         # Pick last 'daysback' rows including today
-        data_ch = data.iloc[-daysback:]
+        data_ch = data.iloc[today_idx - daysback + 1: today_idx + 1]
         cum_ret_ch = (1 + data_ch.pct_change()).cumprod().fillna(1)
         return cum_ret_ch if data_show == 'returns' else data_ch
 
     for i, ticker in enumerate(tickers):
-        # Find today's index in closes
-        today_idx = closes.index[closes.index.date == today_date]
-        if len(today_idx) > 0:
-            latest_idx = today_idx[-1]
-        else:
-            latest_idx = closes.index[-1]  # fallback to last available row
-
-        close_val = closes.loc[latest_idx, ticker]
-        ret_val = returns.loc[latest_idx, ticker]
+        close_val = closes_today[ticker]
+        ret_val = returns_today[ticker]
 
         # Format display values
         if ticker == 'EURUSD=X':

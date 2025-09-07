@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 #import pandas_ta as ta
 import os.path
+import pandas_market_calendars as mcal
 
 import pytz
 
@@ -576,37 +577,42 @@ class Data:
 
         self.data_bundle = pd.concat([self.data_bundle, future_df])
 
-    def add_next_days_same_value(self, num_future_days, tz="Europe/Madrid"):
-        """
-        Extends self.data_bundle with future days
-        repeating the last available values.
-        """
+    def add_next_days_same_value(self, num_future_days, exchange="XNYS"):
+        if num_future_days <= 0:
+            return
+
         if not isinstance(self.data_bundle.index, pd.DatetimeIndex):
-            raise ValueError("self.data_bundle index must be a DatetimeIndex.")
+            self.data_bundle.index = pd.to_datetime(self.data_bundle.index, errors='coerce')
+            if self.data_bundle.index.isnull().any():
+                raise ValueError("self.data_bundle index must be convertible to DatetimeIndex")
 
         if len(self.data_bundle) == 0:
             raise ValueError("self.data_bundle must contain at least 1 row.")
 
-        # Get last known business day in local timezone
-        last_business_day = self.data_bundle.index[-1].tz_localize(None)
+        # Force tz-naive for comparison
+        last_ts = self.data_bundle.index[-1]
+        if last_ts.tz is not None:
+            last_ts = last_ts.tz_convert("UTC").tz_localize(None)
 
-        # Force business days in your timezone
-        local_tz = pytz.timezone(tz)
-        future_dates = pd.bdate_range(
-            start=last_business_day,
-            periods=num_future_days + 1,
-            inclusive="right"
-        ).tz_localize(local_tz)
+        # Get exchange calendar
+        cal = mcal.get_calendar(exchange)
+        schedule = cal.schedule(
+            start_date=last_ts.normalize(),
+            end_date=last_ts + pd.Timedelta(days=60)
+        )
 
-        # Repeat last values
-        last_values = self.data_bundle.iloc[-1]
+        # Extract next valid trading days
+        valid_days = schedule.index[schedule.index > last_ts.normalize()][:num_future_days]
+
+        # Repeat last row
+        last_row = self.data_bundle.iloc[-1]
         future_df = pd.DataFrame(
-            [last_values.values] * num_future_days,
-            index=future_dates,
+            [last_row.values] * len(valid_days),
+            index=valid_days,  # tz-naive like schedule.index
             columns=self.data_bundle.columns
         )
 
-        self.data_bundle = pd.concat([self.data_bundle, future_df])
+        self.data_bundle = pd.concat([self.data_bundle, future_df]).sort_index()
 
     def data_dict_sanitize_OHL(self,verbose=False):
         """
