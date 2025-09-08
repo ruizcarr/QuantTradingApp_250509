@@ -81,10 +81,6 @@ def main(settings):
 
             return data, log_history
 
-        # ---------------- Sidebar / Refresh Control ----------------
-        if st.button("🔄 Refresh App"):
-            st.rerun()  # Full rerun → will fetch new Yahoo data
-
         # ---------------- Main Execution ----------------
         data, log_history = load_and_compute_data(settings)
 
