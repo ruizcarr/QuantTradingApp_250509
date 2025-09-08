@@ -241,33 +241,36 @@ class Data:
             progress=False
         ).dropna()
 
-
         if len(data_bundle) == 0:
             raise ValueError("self.data_bundle is empty. Error at yahoo download")
 
         # Normalize index (force tz-naive)
         data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
-
-        # Drop duplicates
         data_bundle = data_bundle.drop_duplicates()
 
-        # Merge with existing file if exists
+        # --- Check if today's data is present ---
+        tz = pytz.timezone("Europe/Madrid")
+        today_date = datetime.datetime.now(tz).date()
+        if today_date not in data_bundle.index.date:
+            print(f"⚠️ No data for today {today_date}, last row is {data_bundle.index[-1].date()}")
+            # you could decide to:
+            # - leave as is (just warn)
+            # - or try fetching again with end=today+1
+
+        # --- Merge only for saving (offline cache) ---
         if os.path.isfile(self.db_file):
             data = pd.read_csv(self.db_file, header=[0, 1], index_col=0)
-
             data.index = pd.to_datetime(data.index, utc=True).tz_convert(None)
             data = data[~data.index.isna()]
-
-            updated_data_bundle = pd.concat([data, data_bundle])
-            updated_data_bundle = updated_data_bundle.loc[~updated_data_bundle.index.duplicated(keep="first")]
-            updated_data_bundle = updated_data_bundle.sort_index()
+            merged = pd.concat([data, data_bundle])
+            merged = merged.loc[~merged.index.duplicated(keep="first")]
+            merged = merged.sort_index()
         else:
-            updated_data_bundle = data_bundle
+            merged = data_bundle
 
-        # Save merged data
-        updated_data_bundle.to_csv(self.db_file)
+        merged.to_csv(self.db_file)
 
-        # Keep for later use
+        # ✅ Keep *fresh* Yahoo data in memory
         self.data_bundle = data_bundle
 
     def extended_data_OK(self, data_dict, start):
