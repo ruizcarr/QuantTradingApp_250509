@@ -290,12 +290,14 @@ class Data:
         data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
         data_bundle = data_bundle.drop_duplicates()
 
+        """
         if offline and os.path.isfile(self.db_file):
             # merge logic only for offline mode
             saved = pd.read_csv(self.db_file, header=[0, 1], index_col=0)
             saved.index = pd.to_datetime(saved.index, utc=True).tz_convert(None)
             data_bundle = pd.concat([saved, data_bundle]).sort_index()
             data_bundle = data_bundle.loc[~data_bundle.index.duplicated(keep="first")]
+        """
 
         self.data_bundle = data_bundle
         return data_bundle
