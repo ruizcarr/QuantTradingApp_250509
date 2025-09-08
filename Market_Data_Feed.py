@@ -65,7 +65,7 @@ class Data:
         # -----------------------------
         #if not offline:
         self.yf_data_bundle(tickers, start, end, add_days)
-
+        self.data_bundle_yf_raw=self.data_bundle.copy()
         """
         elif offline and os.path.isfile(self.db_file):
             self.data_bundle = pd.read_csv(self.db_file, header=[0,1], index_col=0)

@@ -73,6 +73,7 @@ def main(settings):
             data_ind = mdf.Data_Ind_Feed(settings).data_ind
             data, _ = data_ind
 
+            st.write("data_bundle just after Yahoo Finance download last date", data.data_bundle_yf_raw.index[-1])
             st.write("data_bundle last date",data.data_bundle.index[-1])
 
             # Assuming compute processes the data_ind output
