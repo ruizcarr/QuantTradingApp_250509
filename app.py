@@ -73,6 +73,8 @@ def main(settings):
             data_ind = mdf.Data_Ind_Feed(settings).data_ind
             data, _ = data_ind
 
+            st.write(data.tickers_closes)
+
             # Assuming compute processes the data_ind output
             log_history, _ = compute(settings, data_ind)
 
