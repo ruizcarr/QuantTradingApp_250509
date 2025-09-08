@@ -73,7 +73,7 @@ def main(settings):
             data_ind = mdf.Data_Ind_Feed(settings).data_ind
             data, _ = data_ind
 
-            st.write(data.tickers_closes.tail(10))
+            st.write("data_bundle last date",data.data_bundle.index[-1])
 
             # Assuming compute processes the data_ind output
             log_history, _ = compute(settings, data_ind)

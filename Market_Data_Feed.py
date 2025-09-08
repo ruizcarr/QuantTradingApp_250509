@@ -63,9 +63,10 @@ class Data:
         # -----------------------------
         # 1️⃣ Load or download data_bundle
         # -----------------------------
-        if not offline:
-            self.yf_data_bundle(tickers, start, end, add_days)
+        #if not offline:
+        self.yf_data_bundle(tickers, start, end, add_days)
 
+        """
         elif offline and os.path.isfile(self.db_file):
             self.data_bundle = pd.read_csv(self.db_file, header=[0,1], index_col=0)
             self.data_bundle.index = pd.to_datetime(self.data_bundle.index, errors='coerce')
@@ -73,6 +74,7 @@ class Data:
             self.data_bundle = self.data_bundle.sort_index()
         else:
             raise FileNotFoundError("Offline mode and no saved CSV available")
+        """
 
         print("last data_bundle date after Load",self.data_bundle.index[-1])
 
