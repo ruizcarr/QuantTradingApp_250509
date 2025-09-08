@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy import stats
 from datetime import date
+from datetime import datetime
 from datetime import timedelta
 import yfinance as yf
 import itertools
@@ -228,7 +229,7 @@ class Data:
         #Save for further use
         self.data_bundle = data_bundle
 
-    def yf_data_bundle(self, tickers, start, end, add_days=0):
+    def yf_data_bundle_refresh_issue(self, tickers, start, end, add_days=0):
         """Get OHLC data from Yahoo Finance and store in self.data_bundle."""
 
         tickers_space_sep = " ".join(tickers)
@@ -250,7 +251,7 @@ class Data:
 
         # --- Check if today's data is present ---
         tz = pytz.timezone("Europe/Madrid")
-        today_date = datetime.datetime.now(tz).date()
+        today_date = datetime.now(tz).date()
         if today_date not in data_bundle.index.date:
             print(f"⚠️ No data for today {today_date}, last row is {data_bundle.index[-1].date()}")
             # you could decide to:
@@ -272,6 +273,32 @@ class Data:
 
         # ✅ Keep *fresh* Yahoo data in memory
         self.data_bundle = data_bundle
+
+    def yf_data_bundle(self, tickers, start, add_days=0, offline=False):
+        tz = pytz.timezone("Europe/Madrid")
+        today = datetime.now(tz).date()
+        yf_end = today + timedelta(days=1)  # end exclusive
+
+        data_bundle = yf.download(
+            " ".join(tickers),
+            start=start,
+            end=yf_end,
+            group_by="ticker",
+            progress=False
+        ).dropna()
+
+        data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
+        data_bundle = data_bundle.drop_duplicates()
+
+        if offline and os.path.isfile(self.db_file):
+            # merge logic only for offline mode
+            saved = pd.read_csv(self.db_file, header=[0, 1], index_col=0)
+            saved.index = pd.to_datetime(saved.index, utc=True).tz_convert(None)
+            data_bundle = pd.concat([saved, data_bundle]).sort_index()
+            data_bundle = data_bundle.loc[~data_bundle.index.duplicated(keep="first")]
+
+        self.data_bundle = data_bundle
+        return data_bundle
 
     def extended_data_OK(self, data_dict, start):
         """Extend with  Historical Data if requested """

@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-#from datetime import datetime
 import datetime
+
 from datetime import date
 from datetime import timedelta
 import time
@@ -64,33 +64,30 @@ def main(settings):
         #closes=data.tickers_closes
         #returns=data.tickers_returns
 
-        #@st.cache_data(ttl=3600)  # Cache for 1 hour (adjust as needed)
+        # ---------------- Load & Compute ----------------
         def load_and_compute_data(settings):
             """
-            Fetches raw data and performs computation, with results cached.
+            Fetches raw data and performs computation.
+            Always fetches fresh Yahoo data.
             """
-            #st.write("Fetching and computing data...")
             data_ind = mdf.Data_Ind_Feed(settings).data_ind
             data, _ = data_ind
 
-            st.write("data_bundle just after Yahoo Finance download last date", data.data_bundle_yf_raw.index[-1])
-            st.write("data_bundle last date",data.data_bundle.index[-1])
+            #st.write("settings end last date", settings["end"])
+            #st.write("data_bundle just after Yahoo Finance download last date", data.data_bundle_yf_raw.index[-1])
+            #st.write("data_bundle last date", data.data_bundle.index[-1])
 
-            # Assuming compute processes the data_ind output
             log_history, _ = compute(settings, data_ind)
 
-            # Return all necessary outputs that you want to cache together
             return data, log_history
 
-        if False:
-            if st.button("Refresh App"):
-                #st.session_state.data = None  # Clear the data
-                # Clear the cache for the load_and_process_all_data function
-                load_and_compute_data.clear()
-                st.rerun()  # Rerun the app to call the function again and get fresh data
+        # ---------------- Sidebar / Refresh Control ----------------
+        if st.button("🔄 Refresh App"):
+            st.rerun()  # Full rerun → will fetch new Yahoo data
 
-        # Load data & Compute
+        # ---------------- Main Execution ----------------
         data, log_history = load_and_compute_data(settings)
+
         returns = data.tickers_returns
         closes = data.tickers_closes
 
