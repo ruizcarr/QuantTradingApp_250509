@@ -158,7 +158,7 @@ def main(settings):
             yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
             log_history[log_history["date_time"] >= yesterday]
 
-            closes.loc[yesterday:]
+            closes.loc[yesterday:].iloc[0]
 
 
         #log_history_sort=log_history.sort_values('date', ascending=False)
