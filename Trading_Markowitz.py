@@ -82,7 +82,8 @@ def compute(settings,data_ind):
 
             print("positions\n", positions.tail(15))
 
-            print("log_history\n", log_history.tail(60))
+            yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
+            print("log_history\n", log_history[log_history["date_time"]>=yesterday])
 
             print("eod_log_history\n", eod_log_history.tail(30))
 

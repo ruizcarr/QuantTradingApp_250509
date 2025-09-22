@@ -155,8 +155,13 @@ def main(settings):
         #Display Log History
         with st.expander("See Historical Log:"):
 
-            log_history[-50:]
-            #log_history_sort=log_history.sort_values('date', ascending=False)
+            yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
+            log_history[log_history["date_time"] >= yesterday]
+
+            closes.loc[yesterday:]
+
+
+        #log_history_sort=log_history.sort_values('date', ascending=False)
             #log_history_sort
             #closes_sort=closes.sort_index(ascending=False)
             #closes_sort
