@@ -154,7 +154,7 @@ def main(settings):
 
         #Display Log History
         with st.expander("See Historical Log:"):
-            log_history.loc[today:]
+            log_history.loc[pd.to_datetime(today):]
             #log_history_sort=log_history.sort_values('date', ascending=False)
             #log_history_sort
             #closes_sort=closes.sort_index(ascending=False)
