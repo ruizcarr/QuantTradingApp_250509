@@ -155,9 +155,7 @@ def main(settings):
         #Display Log History
         with st.expander("See Historical Log:"):
 
-            log_history.index
-            type(log_history.index)
-            type(today)
+            log_history[-20:]
             #log_history_sort=log_history.sort_values('date', ascending=False)
             #log_history_sort
             #closes_sort=closes.sort_index(ascending=False)
