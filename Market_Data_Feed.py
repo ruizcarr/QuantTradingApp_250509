@@ -77,7 +77,7 @@ class Data:
             raise FileNotFoundError("Offline mode and no saved CSV available")
         """
 
-        print("last data_bundle date after Load",self.data_bundle.index[-1])
+        #print("last data_bundle date after Load",self.data_bundle.index[-1])
 
         # -----------------------------
         # 2️⃣ Sanitize data_bundle
@@ -97,7 +97,7 @@ class Data:
         self.data_bundle = self.data_bundle.apply(pd.to_numeric, errors='coerce')
         self.data_bundle = self.data_bundle.ffill().bfill()
 
-        print("last data_bundle date after Sanitize", self.data_bundle.index[-1])
+        #print("last data_bundle date after Sanitize", self.data_bundle.index[-1])
 
         # -----------------------------
         # 3️⃣ Add next days if requested
@@ -105,7 +105,7 @@ class Data:
         if add_days > 0:
             self.add_next_days_same_value(add_days)
 
-        print("last data_bundle date after add_next_days", self.data_bundle.index[-1])
+        #print("last data_bundle date after add_next_days", self.data_bundle.index[-1])
 
         # -----------------------------
         # 4️⃣ Pack into data_dict

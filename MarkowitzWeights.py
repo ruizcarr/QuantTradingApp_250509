@@ -86,11 +86,17 @@ def mkwtz_opt_fun(x, CAGR, covariance_matrix,volatility_target):
             A float representing the combined objective function value.
         """
 
-    #x contains weights vector
-    variance=max(np.dot(x.T, np.dot(covariance_matrix, x)).item(),0)
-    volatility_x=(variance**0.5)+0.0001
-    returns_x = np.dot(CAGR.T, x)
-    penalties_x = np.where(volatility_x > volatility_target, volatility_x /volatility_target-1, 0)
+    # Portfolio variance and volatility (annualized)
+    variance = x.T @ covariance_matrix @ x
+    volatility_x = np.sqrt(np.maximum(variance, 0)) + 1e-4
+
+    # Portfolio expected return (annualized)
+    returns_x = CAGR @ x
+
+    # High-volatility penalty (portfolio-level)
+    penalties_highvol = max(volatility_x / volatility_target - 1, 0)
+
+    penalties_x = penalties_highvol
 
     opt_fun = volatility_x  - returns_x + penalties_x
 
