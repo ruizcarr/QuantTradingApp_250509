@@ -54,22 +54,13 @@ class Strategy:
             self.weights_df= mean_positions(self.s_weights_df,self.v_weights_df,settings['w_upper_lim'],
                                          sf = 1.0 ,vf = 1.0 ,overall_f = 1.0)
 
-        if False:
-            from Regresion_of_Features import Regresion_of_Features
-            reg_feat_list = ['rsi_high_keep']  # ,'rsi_high'
-            reg_feat_dict = {key: value for key, value in indicators_dict.items() if key in reg_feat_list}
-            reg_ret=self.weights_df*st_tickers_returns
-            regr = Regresion_of_Features(reg_feat_dict, reg_ret, settings['volatility_target'])
-            regr.results
-            print('[x0,x1,...] for weight= x0 + x1 * feat1 + ...',regr.results.x)
-            print('opt_fun',regr.results.fun)
-
         if settings['apply_strategy_weights']:
             # Apply RSI and other additional Strategy Weights on top of Markowitz weights
             positions=self.ApplyStrategyWeights(self.weights_df,indicators_dict['comb_weights'])
 
         else:
             positions=self.weights_df.copy()
+
 
         self.positions = positions.copy()
 
@@ -146,6 +137,9 @@ class Strategy:
 
         # Apply Pre Optimization with Combined Weights
         positions=w * weights_df
+
+        # Softed Test Positions
+        #positions = raw_weight_pct * weights_df + (1 - raw_weight_pct) * positions
 
         return positions
 

@@ -26,7 +26,7 @@ settings={
     #Settings for Cash Back Test
     'do_BT': True,
     'startcash': 68000, # 60000, #starting cash EUR
-    'mults':{'ES=F': 5, 'NQ=F': 2, 'GC=F': 10, 'CL=F': 500, 'EURUSD=X': 12500,'cash':20}, # multipliers for e-micro futures (CL mini x500, CL micro x100,
+    'mults':{'ES=F': 5, 'NQ=F': 2, 'GC=F': 10, 'CL=F': 100, 'EURUSD=X': 12500,'cash':20}, # multipliers for e-micro futures (CL mini x500, CL micro x100,
     'EURUSD_hedge_factor': 0.0, #Percentage Hedge Exchange Rate Risk 0-1
     'btprint': False,
     'commision': 5, #USD by B/S contract
@@ -92,6 +92,7 @@ settings={
     'weekly_trading_only': False,
     'apply_opt_fun_predict_factor':False, #Apply opt_fun Predictibity factor. Better when Prediction is good
     'apply_strategy_weights': True,  # Apply RSI and other additional Strategy Weights of top of Markowitz weights
+    'raw_weight_pct': 0.40,  # Portion of raw weight keep without apply factor
      #'apply_strategy': True,  #Apply Strategy Weights at Porfolio Optimized Weights
     'use_train_csv': False,  # Use train csv for test without recalculate train again
     'apply_tickers_returns_EUR': False,  #Assets in EUR before Training & Test

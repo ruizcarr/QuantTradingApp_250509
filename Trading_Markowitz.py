@@ -39,16 +39,16 @@ def compute(settings,data_ind):
     #data, indicators_dict =mdf.Data_Ind_Feed(settings).data_ind
     #tickers_returns = data.tickers_returns
     #data_dict=data.data_dict
-    print("Closes with add", data.tickers_closes.tail(10))
-    print("Closes",data.tickers_closes.iloc[:-5].tail())
-    print("Returns", data.tickers_returns.iloc[:-5].tail())
+    #print("Closes with add", data.tickers_closes.tail(10))
+    print("Closes",data.tickers_closes.iloc[:-5].tail(5))
+    #print("Returns", data.tickers_returns.iloc[:-5].tail())
 
-    print("settings['add_days']",settings['add_days'])
-    closes_today = data.tickers_closes.iloc[-settings['add_days']-1]
-    returns_today = data.tickers_returns.iloc[-settings['add_days']-1]
+    #print("settings['add_days']",settings['add_days'])
+    #closes_today = data.tickers_closes.iloc[-settings['add_days']-1]
+    #returns_today = data.tickers_returns.iloc[-settings['add_days']-1]
 
-    print("closes_today",closes_today)
-    print("returns_today",returns_today)
+    #print("closes_today",closes_today)
+    #print("returns_today",returns_today)
 
     # Get Trained Optimized Parameters from csv File
     wft = WalkForwardTraining(data_ind, settings)
@@ -64,7 +64,7 @@ def compute(settings,data_ind):
     if settings['apply_pos_constraints']:
         positions = apply_pos_constrain(positions,settings )
 
-    print("positions",positions.tail())
+    #print("positions",positions.tail())
 
     #Cash BackTest with Backtrader
     if settings['do_BT'] :
@@ -76,16 +76,17 @@ def compute(settings,data_ind):
         eod_log_history, trading_history= process_log_data(log_history,settings)
 
         if verbose:
-            print("tickers_closes\n", data.tickers_closes.tail(15))#[:-5]
+            #print("tickers_closes\n", data.tickers_closes.tail(15))#[:-5]
 
-            print("tickers_returns\n", data.tickers_returns.tail(15))#[:-5]
+            #print("tickers_returns\n", data.tickers_returns.tail(15))#[:-5]
 
-            print("positions\n", positions.tail(15))
+            print("positions\n", positions.tail(10))
+            print("eod_log_history\n", eod_log_history.tail(10))
 
             yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
             print("log_history\n", log_history[log_history["date_time"]>=yesterday])
 
-            print("eod_log_history\n", eod_log_history.tail(30))
+
 
             #print("trading_history\n", trading_history.tail(20))
 

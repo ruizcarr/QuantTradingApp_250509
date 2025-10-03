@@ -388,7 +388,7 @@ class WalkForwardTraining:
 
 
 
-    def Test_by_ttwindows(self,indicators_dict,params_train,do_annalytics=True):
+    def Test_by_ttwindows_nok(self,indicators_dict,params_train,do_annalytics=True):
 
         #print('params_train\n', params_train)
         opt_keys = params_train.columns[1:]
@@ -435,6 +435,8 @@ class WalkForwardTraining:
             test_positions = pd.concat([test_positions, slice_positions], axis=0)
             test_fun = pd.concat([test_fun, slice_fun], axis=0)
 
+
+
             if do_annalytics:
 
                 # Get Slice analytics
@@ -458,9 +460,9 @@ class WalkForwardTraining:
          #Save test_returns & weights & positions to share
         self.test_returns=test_returns
         self.test_weights=test_weights
-        self.test_positions = test_positions
-
-        # Save optimize function
+        #self.raw_test_positions = test_positions
+        #self.test_positions = 0.4*test_positions+0.6*test_weights
+        # Save optimize funtion
         #self.strategy_fun = test_fun
 
 

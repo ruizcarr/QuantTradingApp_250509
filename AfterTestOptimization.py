@@ -29,7 +29,7 @@ class AfterTestOptimization:
             plot_df.plot(title='Test Returns')
 
             # Quanstats Report
-            if True:
+            if False:
                 q_title = 'Study After Test Optimization'
                 path = "results\\"
                 q_filename = path + q_title + '.html'

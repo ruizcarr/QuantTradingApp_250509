@@ -72,10 +72,14 @@ def run(settings):
     start = time.time()
     wft.Test(indicators_dict,params_train,settings['do_annalytics'])
 
-    #Get Test Positions
+    #Get Positions
     positions = wft.test_positions
 
     positions.plot(title='Test Positions')
+
+    print("Test Weights\n", wft.test_weights.tail(10))
+    #print("Raw Test Positions\n", wft.raw_test_positions.tail(10))
+    print("Test Positions\n", wft.test_positions.tail(10))
 
     #After Test Optimization
     if settings['apply_after_test_opt']:
@@ -83,11 +87,14 @@ def run(settings):
         ATO = AfterTestOptimization(wft.test_positions, wft.test_returns, mean_w=22 * 9,over_mean_pct=0.04, lookback=22 * 2, up_f=1.3, dn_f=1.0, plotting=True)
         positions = ATO.after_test_positions
 
+        print("ATO Positions\n", positions.tail(10))
+
     #Apply Exposition Constraints
     #Exponential factor,Mult factor & Limit maximum/minimum individual position
     if settings['apply_pos_constraints']:
         positions = apply_pos_constrain(positions,settings )
 
+        print("Pos Constraints Positions\n", positions.tail(10))
 
     end = time.time()
     times['test'] =  round(end - start,3)
@@ -225,12 +232,25 @@ def apply_pos_constrain(positions,settings ):
     #if settings['add_cash']:
     #    settings['pos_mult_factor'] = 2 * settings['pos_mult_factor'] * settings['tickers_bounds']['cash'][1] * 10
 
+    #keep CL positions
+    if 'CL=F' in positions.columns:
+        keep_CL=positions['CL=F'].copy()
+
     # Apply Exponential factor keeping position sign
     positions =np.sign(positions) *positions.abs() ** settings['pos_exp_factor']
 
     # Apply Mult factor
     positions = positions * settings['pos_mult_factor']
 
+
+    if 'CL=F' in positions.columns:
+
+        # Do not apply multiplicators to CL positions
+        positions['CL=F'] = keep_CL
+
+        # Apply CL=F Penalties
+        #positions['CL=F'] = positions['CL=F'] / 2
+        positions['CL=F'] = positions['CL=F'].clip(upper=0.1)
 
     # Limit Position to maximum of Exposition Allowed
     positions_sum=positions.sum(axis=1)
@@ -249,10 +269,6 @@ def apply_pos_constrain(positions,settings ):
         available_cash = 1 - futures_guaranties
         positions['cash'] = positions['cash'].clip(upper=available_cash)
 
-    #Apply CL=F Penalties
-    if 'CL=F' in positions.columns:
-        positions['CL=F']=positions['CL=F']/2
-        #positions['CL=F'] = positions['CL=F'].clip(upper=0.1)
 
 
     return positions

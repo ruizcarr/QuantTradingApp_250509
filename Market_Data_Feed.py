@@ -979,8 +979,19 @@ class Indicators:
 
         # Combined Weights
         self.comb_weights =  self.rsi_reverse_keep_weights * self.norm_weights *self.Euribor_ind # * self.exp_weights * self.rsi_sigmoid_weight * m_trend_weights #* trend_corr_high#  * rsi_weights * chopp_factor #* boll_pct_weights
-        self.comb_weights['cash'] = self.Euribor_ind['cash']
+
+        # Softed Factor
+        raw_weight_pct =settings['raw_weight_pct']
+        self.comb_weights = raw_weight_pct + (1 - raw_weight_pct) * self.comb_weights
+
+        #Exceptions
+        if 'cash' in self.comb_weights.columns:
+            self.comb_weights['cash'] = self.Euribor_ind['cash']
+
+        #Final Clip
         self.comb_weights =self.comb_weights.clip(upper=2.5,lower=0)
+
+
 
         #Get US FED Interest Rates
         #self.fed_df = get_fed_1year_treasury_yield_daily().reindex(tickers_returns.index, method="ffill")
