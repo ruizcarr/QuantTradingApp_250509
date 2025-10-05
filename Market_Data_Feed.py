@@ -984,9 +984,12 @@ class Indicators:
         raw_weight_pct =settings['raw_weight_pct']
         self.comb_weights = raw_weight_pct + (1 - raw_weight_pct) * self.comb_weights
 
-        #Exceptions
+        #Exceptions by Asset
         if 'cash' in self.comb_weights.columns:
             self.comb_weights['cash'] = self.Euribor_ind['cash']
+
+        if 'EURUSD=X' in self.comb_weights.columns:
+            self.comb_weights['EURUSD=X'] = 1
 
         #Final Clip
         self.comb_weights =self.comb_weights.clip(upper=2.5,lower=0)

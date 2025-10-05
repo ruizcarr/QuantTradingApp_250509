@@ -20,7 +20,7 @@ settings={
 
     #Settings for Portfolio Optimization
     #'tickers_bounds': {'ES=F': (0,0.25), 'NQ=F': (-0,0.25), 'GC=F': (0.00,0.5), 'CL=F': (0,0.1), 'EURUSD=X': (-0,0.0),'cash':(0,0.30)},  # Default Weights Bounds Upper Limit for Each asset at optimization {'ES=F': 0.50, 'NQ=F': 0.50, 'GC=F': 0.50, 'EURUSD=X': 0.25, 'CL=F': 0.25}
-    'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.0, 0.0), 'cash': (0, 0.3)},
+    'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02), 'cash': (0, 0.3)},
     'volatility_target': 0.110,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115
 
     #Settings for Cash Back Test
