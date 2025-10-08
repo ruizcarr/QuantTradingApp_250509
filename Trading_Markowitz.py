@@ -113,6 +113,12 @@ def compute(settings,data_ind):
             cum_ret_by_ticker=(1+returns).cumprod()
             tickers_cumret=(1+tickers_returns).cumprod()
 
+            tickers_returns_mean=tickers_returns.rolling(220).mean().shift(1)
+             #system_perfomance = (returns - tickers_returns).shift(1).rolling(22).sum()
+            system_perfomance =100*tickers_returns_mean* (nc - 1)
+            system_perf_idx = pd.DataFrame(np.sign(system_perfomance),
+                                           columns=tickers_returns.columns, index=tickers_returns.index)
+
             rsi_reverse_keep_weights=indicators_dict['rsi_reverse_keep_weights'].reindex(nc.index)
             comb_weights = indicators_dict['comb_weights'].reindex(nc.index)
             norm_weights = indicators_dict['norm_weights'].reindex(nc.index)
@@ -123,10 +129,14 @@ def compute(settings,data_ind):
                 plot_df2['nc']=nc[col]
                 plot_df2['cum_ret'] = cum_ret_by_ticker[col]
                 plot_df2['ticker_cumret'] = tickers_cumret[col]
-                plot_df2['rsi_reverse_keep_weights'] = rsi_reverse_keep_weights[col]
+                #plot_df2['rsi_reverse_keep_weights'] = rsi_reverse_keep_weights[col]
                 #plot_df2['comb_weights'] = comb_weights[col]
                 #plot_df2['norm_weights'] = norm_weights[col]
-                plot_df2['trend_corr_high'] = trend_corr_high[col]
+                #plot_df2['trend_corr_high'] = trend_corr_high[col]
+                #plot_df2['last_tickers_returns'] = last_tickers_returns[col]
+                #plot_df2['last_returns'] = last_returns[col]
+                plot_df2['system_perfomance'] = system_perfomance[col]
+                plot_df2['system_perf_idx'] = 10 * system_perf_idx[col]
                 plot_df2.plot(title=col + ' Returns')
 
 
