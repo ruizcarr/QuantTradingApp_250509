@@ -42,7 +42,7 @@ settings={
 
     #Markowitz Windows Parameters [fast,mid,slow]
     'mkwtz_ws': [44,180,360],# Markowitz Lookback Window days [fast,mid,slow]
-    'mkwtz_mean_fs': [0.9,1,1],  # factor to apply when mean of diferent windows weights[fast,mid,slow]
+    'mkwtz_mean_fs': [1,1,1],  # [0.9,1,1],factor to apply when mean of diferent windows weights[fast,mid,slow]
     'mkwtz_ps':  ['W-FRI','W-FRI','M'], #Rebalance Period 'W-FRI','M','Q','Y' [fast,mid,slow]
 
     #Walk Forward Training & Test Parameters

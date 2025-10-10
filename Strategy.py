@@ -54,6 +54,7 @@ class Strategy:
             self.weights_df= mean_positions(self.s_weights_df,self.v_weights_df,settings['w_upper_lim'],
                                          sf = 1.0 ,vf = 1.0 ,overall_f = 1.0)
 
+
         if settings['apply_strategy_weights']:
             # Apply RSI and other additional Strategy Weights on top of Markowitz weights
             positions=self.ApplyStrategyWeights(self.weights_df,indicators_dict['comb_weights'])
@@ -123,7 +124,8 @@ class Strategy:
             return weights_df, opt_fun_predict_factor, fun_df, weights_dict
 
         #Get weightged Mean with opt_fun Predictibity factor
-        self.weights_df, self.opt_fun_predict_factor, self.opt_fun_df,self.weights_by_period_dict= get_weights_df(self.tsw_dict,settings['mkwtz_mean_fs'],settings['apply_opt_fun_predict_factor'])
+        self.weights_df, self.opt_fun_predict_factor, self.opt_fun_df,self.weights_by_period_dict= (
+            get_weights_df(self.tsw_dict,settings['mkwtz_mean_fs'],settings['apply_opt_fun_predict_factor']))
 
         return self.weights_df
 
