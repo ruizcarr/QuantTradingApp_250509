@@ -59,7 +59,6 @@ def main(settings):
         st.set_page_config(layout="wide", page_title='Quant Trading App')
 
 
-
         #Update Settings
         # Import Trading Settings
         settings['verbose']=False
@@ -100,6 +99,8 @@ def main(settings):
             return data, log_history
 
         # ---------------- Main Execution ----------------
+
+        # Now load (cached) data
         data, log_history = load_and_compute_data(settings)
 
         returns = data.tickers_returns
@@ -533,6 +534,11 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
             cols[0].title("Quant Trading App")
             cols[0].write(market_data_head_1)
             cols[0].write(market_data_head_2)
+
+            # ----------------- Refresh Button -----------------
+            if cols[0].button("🔄 Refresh data"):
+                st.cache_data.clear()
+                st.cache_resource.clear()
 
         # Display metrics
         cols[i + 1].metric(label=f"**{ticker}**", value=close_fmt, delta=delta_val)
