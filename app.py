@@ -533,7 +533,7 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
         if i == 0:
             cols[0].title("Quant Trading App")
             cols[0].write(market_data_head_1)
-            cols[0].write(market_data_head_2)
+            #cols[0].write(market_data_head_2)
 
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh data"):
