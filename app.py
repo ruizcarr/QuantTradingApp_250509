@@ -15,6 +15,10 @@ import subprocess
 import sys
 import os
 
+import numpy as np, random
+np.random.seed(42)
+random.seed(42)
+
 from check_password import check_password
 from Trading_Markowitz import compute,process_log_data
 from config.trading_settings import settings
@@ -55,7 +59,7 @@ def main(settings):
         # Import Trading Settings
         settings['verbose']=False
         settings['qstats']=st.session_state.qstats
-        settings['do_BT'] = True
+        #settings['do_BT'] = True
 
         #Get Trading results
         #log_history, _, data = compute(settings)
@@ -64,7 +68,11 @@ def main(settings):
         #closes=data.tickers_closes
         #returns=data.tickers_returns
 
+        #Debug
+        #st.write("Before Load & Compute: settings end last date", settings["end"])
+
         # ---------------- Load & Compute ----------------
+        @st.cache_resource
         def load_and_compute_data(settings):
             """
             Fetches raw data and performs computation.
@@ -91,8 +99,8 @@ def main(settings):
         closes = data.tickers_closes
 
         #Debug
+        #st.write("After Load & Compute: settings end last date",settings['end'])
         #st.write(st.session_state)
-        #st.write(settings['end'])
         #st.write(closes.tail(10))
         # returns = closes.pct_change()
         #st.write(returns)
@@ -239,7 +247,7 @@ def display_portfolio_positions_nok(eod_log_history,trading_history,date,setting
                 cum_ret = (1 + returns.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
                 alt_chart1=chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
                 alt_chart2 = chart_ts_altair(cum_ret,  ticker, color="grey", st_altair_chart=False)
-                st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
+                st.altair_chart(alt_chart1 + alt_chart2, width=True)
 
 def display_portfolio_positions(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,daysback=3*22+1,forecast=False):
 
@@ -302,7 +310,7 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
                 cum_ret = (1 + returns.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
                 alt_chart1=chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
                 alt_chart2 = chart_ts_altair(cum_ret,  ticker, color="grey", st_altair_chart=False)
-                st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
+                st.altair_chart(alt_chart1 + alt_chart2, width=True)
 
 
 def display_portfolio_results_NOK(eod_log_history,today,settings,daysback=3*22):
@@ -381,7 +389,7 @@ y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
 )
 
     if st_altair_chart:
-        st.altair_chart(alt_chart,use_container_width=True )
+        st.altair_chart(alt_chart,width=True )
 
     return alt_chart
 
