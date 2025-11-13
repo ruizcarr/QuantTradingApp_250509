@@ -595,10 +595,10 @@ def display_orders_ok(log_history,settings):
         next_day = orders_ahead['date'].iloc[0]
         next_orders = orders_history.loc[orders_history['date'] == next_day]
 
-        display_orders_log(next_orders, 'Next Orders Forecast')
+        display_orders_log(next_orders, 'Upcoming Orders')
 
     else:
-        cols[1].write("No Orders Forecast  in the next days")
+        cols[1].write("Not Upcoming Orders shortly")
 
 def display_orders(log_history,settings):
     def display_orders_log(df, title,col=0):
