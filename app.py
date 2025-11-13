@@ -24,6 +24,11 @@ from Trading_Markowitz import compute,process_log_data
 from config.trading_settings import settings
 import Market_Data_Feed as mdf
 
+import copy
+
+local_settings = copy.deepcopy(settings)
+
+
 #For Local Run bellow in the pycharm terminal
 #streamlit run app.py
 #Ctrl + c to stop
@@ -60,6 +65,8 @@ def main(settings):
         settings['verbose']=False
         settings['qstats']=st.session_state.qstats
         #settings['do_BT'] = True
+
+
 
         #Get Trading results
         #log_history, _, data = compute(settings)
@@ -643,7 +650,7 @@ def display_orders(log_history,settings):
         cols[1].write("No Orders Forecast  in the next days")
 
 if __name__ == '__main__':
-    main(settings)
+    main(local_settings)
 
 
 
