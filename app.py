@@ -536,7 +536,7 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
             #cols[0].write(market_data_head_2)
 
             # ----------------- Refresh Button -----------------
-            if cols[0].button("🔄 Refresh data"):
+            if cols[0].button("🔄 Refresh Data"):
                 st.cache_data.clear()
                 st.cache_resource.clear()
 
