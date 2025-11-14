@@ -109,7 +109,7 @@ def main(settings):
         #Debug
         #st.write("After Load & Compute: settings end last date",settings['end'])
         #st.write(st.session_state)
-        st.write(closes.tail(10))
+        #st.write(closes.tail(10))
         # returns = closes.pct_change()
         #st.write(returns)
 
