@@ -145,17 +145,27 @@ class Data:
             euribor_df = get_euribor_1y_daily().reindex(self.tickers_closes.index, method="ffill")
             self.tickers_closes['cash'] = 1000 * (1 + euribor_df['Euribor'] / 255).cumprod()
 
+
             # Add cash to data_dict
             df_cash = list(self.data_dict.values())[0].copy()
             for col in df_cash.columns:
                 df_cash[col] = self.tickers_closes['cash']
             self.data_dict['cash'] = df_cash
 
+        # -----------------------------
+        # 6️⃣.1 Create tickers_opens
+        # -----------------------------
+
+        opens = {tick: df['Open'] for tick, df in self.data_dict.items()}
+        self.tickers_opens = pd.DataFrame(opens)
+
 
         # -----------------------------
         # 7️⃣ Compute returns
         # -----------------------------
         self.tickers_returns = self.tickers_closes.pct_change().fillna(0)
+
+        self.intraday_tickers_returns=(self.tickers_closes/self.tickers_opens-1).fillna(0)
 
 
         # -----------------------------

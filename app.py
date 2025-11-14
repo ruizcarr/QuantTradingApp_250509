@@ -105,6 +105,9 @@ def main(settings):
 
         returns = data.tickers_returns
         closes = data.tickers_closes
+        intraday_tickers_returns=data.intraday_tickers_returns
+
+
 
         #Debug
         #st.write("After Load & Compute: settings end last date",settings['end'])
@@ -112,6 +115,7 @@ def main(settings):
         #st.write(closes.tail(10))
         # returns = closes.pct_change()
         #st.write(returns)
+        #st.write(intraday_tickers_returns)
 
         #Process Log Data
         eod_log_history,trading_history=process_log_data(log_history,settings)
@@ -126,7 +130,7 @@ def main(settings):
         #Display Title & tickers data
         display_tickers_data(
             closes,
-            returns,
+            intraday_tickers_returns, #To avoid yahoo previous day mising data problems
             settings,
             sidebar=False,
             daysback=st.session_state.daysback,
