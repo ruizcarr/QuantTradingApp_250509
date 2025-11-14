@@ -109,7 +109,7 @@ def main(settings):
         #Debug
         #st.write("After Load & Compute: settings end last date",settings['end'])
         #st.write(st.session_state)
-        #st.write(closes.tail(10))
+        st.write(closes.tail(10))
         # returns = closes.pct_change()
         #st.write(returns)
 
@@ -502,7 +502,8 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
     returns_today = returns.iloc[today_idx]
 
     # Header string: use the index date instead of datetime.now()
-    today_date = closes.index[today_idx].date()
+    #today_date = closes.index[today_idx].date()
+    today_date = closes.index[today_idx]#.date()
     market_data_head_1 = f"**Market Data: {today_date}**"
     market_data_head_2 = "(data with 15min delay)"
 
@@ -524,21 +525,32 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
         else:
             close_fmt = f"{close_val:,.0f}"
 
-        delta_val = f"{ret_val:.1%}"
+        delta_val = f"{ret_val:.2%}"
         if ticker == 'cash':
             ret_val *= 255
-            delta_val = f"@ {ret_val:.1%} EURIBOR"
+            delta_val = f"@ {ret_val:.2%} EURIBOR"
 
         # Display header in first column
         if i == 0:
             cols[0].title("Quant Trading App")
-            cols[0].write(market_data_head_1)
+            #cols[0].write(market_data_head_1)
             #cols[0].write(market_data_head_2)
+
+            # Initialize timestamp on first run
+            if "last_refresh" not in st.session_state:
+                st.session_state["last_refresh"] = pd.Timestamp.now()
 
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh Data"):
                 st.cache_data.clear()
                 st.cache_resource.clear()
+                st.session_state["last_refresh"] = pd.Timestamp.now()
+                st.rerun() # <--- Force instant rerun
+
+            # Display timestamp
+            cols[0].write(
+                f"🕒 **{st.session_state['last_refresh'].strftime('%Y-%m-%d %H:%M')}** (data delayed 15min )"
+            )
 
         # Display metrics
         cols[i + 1].metric(label=f"**{ticker}**", value=close_fmt, delta=delta_val)

@@ -132,6 +132,8 @@ class Data:
         closes = {tick: df['Close'] for tick, df in self.data_dict.items()}
         self.tickers_closes = pd.DataFrame(closes)
 
+
+
         # Ensure tz-naive
         #self.tickers_closes.index = pd.to_datetime(self.tickers_closes.index, utc=True).tz_convert(None)
         #
@@ -286,6 +288,8 @@ class Data:
             group_by="ticker",
             progress=False
         ).dropna()
+
+        #print("data_bundle before change index",data_bundle.index)
 
         data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
         data_bundle = data_bundle.drop_duplicates()

@@ -84,11 +84,11 @@ def compute(settings,data_ind):
             print("eod_log_history\n", eod_log_history.tail(10))
 
             yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
-            print("log_history\n", log_history[log_history["date_time"]>=yesterday])
+            weekago= pd.Timestamp.today().normalize() - pd.Timedelta(days=7)
+            print("log_history\n", log_history[log_history["date_time"]>=weekago])
 
 
-
-            #print("trading_history\n", trading_history.tail(20))
+            #print("trading_history\n", trading_history.tail(30))
 
     end_time = time.time()
     if verbose:
