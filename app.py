@@ -548,7 +548,7 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
             if cols[0].button("🔄 Refresh Data"):
                 st.cache_data.clear()
                 st.cache_resource.clear()
-                st.session_state["last_refresh"] = pd.Timestamp.now()
+                st.session_state["last_refresh"] = pd.Timestamp.now().tz_localize("UTC").tz_convert("Europe/Madrid")
                 st.rerun() # <--- Force instant rerun
 
             # Display timestamp
