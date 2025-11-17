@@ -109,7 +109,7 @@ def main(settings):
 
         # cash exception
         if 'cash' in intraday_tickers_returns.columns:
-            intraday_tickers_returns['cash']=returns['cash']
+            intraday_tickers_returns['cash']=returns['cash'].copy()
 
         #Debug
         #st.write("After Load & Compute: settings end last date",settings['end'])
