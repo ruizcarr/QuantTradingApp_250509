@@ -111,8 +111,6 @@ def main(settings):
         if 'cash' in intraday_tickers_returns.columns:
             intraday_tickers_returns['cash']=returns['cash']
 
-
-
         #Debug
         #st.write("After Load & Compute: settings end last date",settings['end'])
         #st.write(st.session_state)
