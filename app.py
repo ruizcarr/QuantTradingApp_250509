@@ -107,6 +107,10 @@ def main(settings):
         closes = data.tickers_closes
         intraday_tickers_returns=data.intraday_tickers_returns
 
+        # cash exception
+        if 'cash' in intraday_tickers_returns.columns:
+            intraday_tickers_returns['cash']=returns['cash']
+
 
 
         #Debug
@@ -198,69 +202,6 @@ def main(settings):
 def get_daysback(chart_len_dict):
     st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
 
-def display_portfolio_positions_nok(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,daysback=3*22+1,forecast=False):
-
-    st.write(f"**Portfolio Positions:**")
-    if not forecast:
-        today = datetime.datetime.now().date()
-
-    else:
-        today=None
-
-    #Get portfolio and trading of today
-    last_portfolio = eod_log_history.loc[:today].iloc[-1][settings['tickers']]
-    pre_portfolio = eod_log_history.loc[:today].iloc[-2][settings['tickers']]
-    last_trade = last_portfolio-pre_portfolio
-
-    #Position & Portfolio Value at end of Today in USD and EUR
-
-    pos_value_today=eod_log_history.loc[:today,'pos_value'].iloc[-1]
-    #porfolio_value_today = eod_log_history.loc[:today, 'portfolio_value'].iloc[-1]
-    porfolio_value_today_eur = eod_log_history.loc[:today, 'portfolio_value_eur'].iloc[-1]
-
-    exchange_rate=eod_log_history.loc[:today, 'exchange_rate'].iloc[-1]
-    pos_value_today_eur=pos_value_today*exchange_rate
-    exposition = pos_value_today_eur / porfolio_value_today_eur * 100
-
-    #Display Current Portfolio
-    n_col=len(settings["tickers"])+1
-    #col_width_list=[2]+[1]*(n_col-1)
-    col_width_list = [7] + [3] * (n_col - 1)
-    cols=st.columns(col_width_list)
-
-    with cols[0]:
-        st.write("Tickers:")
-        st.write("Nbr of Contracts:")
-        st.write(f"Last Trade date: {date}")
-        st.write(f"Position Value / Exposition @: {today}")
-        #st.subheader(f"{pos_value_today:,.0f} USD /  {exposition:,.0f} %")
-        st.subheader(f"{pos_value_today_eur:,.0f} € /  {exposition:,.0f} %")
-
-
-
-    for i in range(1,n_col):
-        j=i-1
-        ticker=trading_history.columns[j]
-        label=f"**{ticker}**"
-        value=int(last_portfolio[j])
-        delta=int(last_trade[j])
-        cols[i].metric(label=label,value=value,delta=delta)
-
-        #Chart weights evolution
-
-        with cols[i]:
-            w=daysback #3*22
-            if daysback > 6:
-                chart_ts_altair(eod_log_history.iloc[-w:].loc[:today], ticker)
-
-            if not forecast:
-                cum_ret_by_ticker = (1 + ret_by_ticker.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
-                #cum_ret_by_ticker = cum_ret_by_ticker.fillna(1)
-                cum_ret = (1 + returns.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
-                alt_chart1=chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
-                alt_chart2 = chart_ts_altair(cum_ret,  ticker, color="grey", st_altair_chart=False)
-                st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
-
 def display_portfolio_positions(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,daysback=3*22+1,forecast=False):
 
     st.write(f"**Portfolio Positions:**")
@@ -325,40 +266,6 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
                 st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
 
 
-def display_portfolio_results_NOK(eod_log_history,today,settings,daysback=3*22):
-
-    st.write(f"**Portfolio Results:**")
-
-    #col_width_list = [2] + [1] * 4
-    col_width_list = [3] + [2] * 4
-    cols = st.columns(col_width_list)
-
-    # Display Portfolio Value
-    #portfolio_value=eod_log_history.loc[:today,"portfolio_value"].iloc[-1]
-    portfolio_value_eur = eod_log_history.loc[:today, "portfolio_value_eur"].iloc[-1]
-    ret=eod_log_history.loc[:today,"portfolio_return"].iloc[-1]
-    with cols[0]:
-        #st.metric(label=f"**Portfolio Value {today}**",value=f"{portfolio_value:,.0f} USD", delta=f"{ret:.1%}")
-        st.metric(label=f"**Portfolio Value {today}**", value=f"{portfolio_value_eur:,.0f} €", delta=f"{ret:.1%}")
-
-        #Chart Portfolio Value
-        #chart_ts_altair(eod_log_history.iloc[-daysback-settings['add_days']:-settings['add_days']], "portfolio_value")
-        chart_ts_altair(eod_log_history.iloc[-daysback - settings['add_days']:-settings['add_days']], "portfolio_value_eur")
-
-    #Display CAGR
-    keys=["cagr","weekly_return","monthly_return"]
-    for i,key in enumerate(keys):
-        cagr=eod_log_history.loc[:today,key].iloc[-1]
-        #diff=f"{cagr*portfolio_value:,.0f}"
-        diff_eur = f"{cagr * portfolio_value_eur:,.0f} €"
-        #cols[i+1].metric(label=f"**{key}**",value=diff, delta=f"{cagr:.1%}")
-        cols[i + 1].metric(label=f"**{key}**", value=diff_eur, delta=f"{cagr:.1%}")
-
-    #Display DDN
-    #ddn=eod_log_history.loc[:today,"ddn"].iloc[-1]
-    ddn = eod_log_history.loc[:today, "ddn_eur"].iloc[-1]
-    cols[4].metric(label="**Drawdown YTD**", delta="", value=f"{ddn:.1%}")
-
 def display_portfolio_results(eod_log_history, settings, daysback=3*22):
     st.write("**Portfolio Results:**")
 
@@ -404,91 +311,6 @@ y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
         st.altair_chart(alt_chart,use_container_width=True )
 
     return alt_chart
-
-
-def display_tickers_data_nok(closes,returns,today,settings,sidebar=False,daysback=3*22,data_show='returns',chart=True):
-
-    tickers = settings["tickers"]
-    #cols = st.columns(len(tickers)+1)
-    n_col = len(tickers) + 1
-    #col_width_list = [2] + [1] * (n_col - 1)
-    col_width_list = [7] + [3] * (n_col - 1)
-    cols = st.columns(col_width_list)
-
-
-    # Get the current time
-    tz = pytz.timezone('Europe/Madrid')
-    now =datetime.datetime.now(tz)
-    # Format the time as a string
-    time_string = now.strftime('%H:%M:%S')
-    market_data_head_1=f"**Maket Data: {today} {time_string}**"
-    market_data_head_2 = f"(data with 15min delay)"
-
-
-    def get_chart_data(data,daysback=5+1,data_show='returns'):
-
-        # Display line chart for days len back
-        data_ch = data.loc[:today].iloc[-daysback:]
-
-        #Returns
-        cum_ret_ch=(1+data_ch.pct_change()).cumprod().fillna(1)
-
-        if data_show=='returns':
-            chart_data=cum_ret_ch
-        else:
-            chart_data = data_ch
-
-        return chart_data
-
-
-    for i,ticker in enumerate(tickers):
-        #close=closes.loc[today,ticker]
-        close = closes.loc[:today, ticker].iloc[-1]
-        if ticker=='EURUSD=X': close_f = f"{close:,.3f}"
-        elif ticker == 'CL=F':close_f = f"{close:,.2f}"
-        else: close_f=f"{close:,.0f}"
-        ret = returns.loc[:today, ticker].iloc[-1]
-        label=f"**{ticker}**"
-        value=close_f
-        delta=f"{ret:.1%}"
-
-        if ticker =='cash':
-            ret=ret*255
-            delta = f"@ {ret:.1%} EURIBOR"
-
-        if not sidebar:
-
-            # display Market Data Header
-            if i==0:
-                cols[0].title('Quant Trading App')
-                cols[0].write(market_data_head_1+market_data_head_2)
-
-
-            # display Market Data & Small Chart
-            cols[i + 1].metric(label, value, delta)
-
-            if chart:
-                with cols[i + 1]:
-                    chart_ts_altair(chart_data, ticker)
-
-        else:
-            st.title('Quant Trading App')
-           #display Market Data Header in Sidebar
-            if i == 0:
-                with st.sidebar:
-                    st.write(market_data_head_1)
-                    st.write(market_data_head_2)
-
-                   #Chart Options
-                    chart_data = get_chart_data(data=closes,daysback=daysback,data_show=data_show)
-
-
-           # display Market Data & Small Chart in Sidebar
-            scol1, scol2 = st.sidebar.columns([2, 3])
-            scol1.metric(label, value, delta)
-            if chart:
-                with scol2:
-                    chart_ts_altair(chart_data, ticker)
 
 def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22, data_show='returns', chart=True):
     """
