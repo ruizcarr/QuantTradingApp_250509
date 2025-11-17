@@ -542,7 +542,7 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
 
             # Initialize timestamp on first run
             if "last_refresh" not in st.session_state:
-                st.session_state["last_refresh"] = pd.Timestamp.now()
+                st.session_state["last_refresh"] = pd.Timestamp.now().tz_localize("UTC").tz_convert("Europe/Madrid")
 
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh Data"):
