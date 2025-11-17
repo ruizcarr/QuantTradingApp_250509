@@ -107,6 +107,8 @@ def main(settings):
         closes = data.tickers_closes
         intraday_tickers_returns=data.intraday_tickers_returns
 
+
+
         # cash exception
         if 'cash' in intraday_tickers_returns.columns:
             intraday_tickers_returns['cash']=returns['cash'].copy()
