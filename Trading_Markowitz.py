@@ -18,7 +18,7 @@ pd.set_option('display.width', None)
 import warnings
 warnings.filterwarnings('ignore')
 
-from WalkForwardTraining import WalkForwardTraining,get_params_from_csv
+
 import Market_Data_Feed as mdf
 from Backtest_Vectorized_Class import compute_backtest_vectorized
 #from Backtest_Vectorized import compute_backtest_vectorized
@@ -40,7 +40,7 @@ def compute(settings,data_ind):
     #tickers_returns = data.tickers_returns
     #data_dict=data.data_dict
     #print("Closes with add", data.tickers_closes.tail(10))
-    print("Closes",data.tickers_closes.iloc[:-5].tail(5))
+    #print("Closes",data.tickers_closes.iloc[:-5].tail(5))
     #print("Returns", data.tickers_returns.iloc[:-5].tail())
 
     #print("settings['add_days']",settings['add_days'])
@@ -50,20 +50,9 @@ def compute(settings,data_ind):
     #print("closes_today",closes_today)
     #print("returns_today",returns_today)
 
-    # Get Trained Optimized Parameters from csv File
-    wft = WalkForwardTraining(data_ind, settings)
-    params_train = get_params_from_csv(settings['path_train']+'params_train.csv',
-        wft.tt_windows, settings)
 
-    #Trading/Test: Apply Params Train to Test
-    wft.Test(indicators_dict,params_train,do_annalytics=False)
-    positions=wft.test_positions
 
-    #Apply Exposition Constraints
-    #Exponential factor,Mult factor & Limit maximum/minimum individual position
-    if settings['apply_pos_constraints']:
-        positions = apply_pos_constrain(positions,settings )
-
+    positions = get_trading_positions(data_ind, settings,indicators_dict)
     #print("positions",positions.tail())
 
     #Cash BackTest with Backtrader
@@ -218,6 +207,26 @@ def process_log_data_duplicated(log_history,settings):
     eod_log_history["monthly_return"]=eod_log_history["portfolio_return"].rolling(22).sum()
 
     return eod_log_history,trading_history
+
+def get_trading_positions(data_ind, settings,indicators_dict):
+
+    from WalkForwardTraining import WalkForwardTraining, get_params_from_csv
+
+    # Get Trained Optimized Parameters from csv File
+    wft = WalkForwardTraining(data_ind, settings)
+    params_train = get_params_from_csv(settings['path_train']+'params_train.csv',
+        wft.tt_windows, settings)
+
+    #Trading/Test: Apply Params Train to Test
+    wft.Test(indicators_dict,params_train,do_annalytics=False)
+    positions=wft.test_positions
+
+    #Apply Exposition Constraints
+    #Exponential factor,Mult factor & Limit maximum/minimum individual position
+    if settings['apply_pos_constraints']:
+        positions = apply_pos_constrain(positions,settings )
+
+    return positions
 
 
 if __name__ == '__main__':
