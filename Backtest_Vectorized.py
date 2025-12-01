@@ -7,6 +7,9 @@ import os
 import quantstats_lumi as quantstats
 import webbrowser
 
+from sympy.core.expr import unchanged
+
+
 #Cash Backtest with backtest Vectorized
 
 def compute_backtest_vectorized(weights, settings, data_dict):
@@ -168,7 +171,14 @@ def   compute_backtest(weights_div_asset_price,asset_price,opens,highs,lows,clos
     target_size_raw = weights_div_asset_price.multiply(portfolio_to_invest, axis=0).fillna(0)
 
     #Upgrade target_size to 1 when target_size is over treshold
-    target_size_raw[target_size_raw > upgrade_treshold] = target_size_raw.clip(lower=1)
+    mask = target_size_raw > upgrade_treshold
+
+    # Exclude CL=F if present
+    if "CL=F" in target_size_raw.columns:
+        mask["CL=F"] = False
+
+    # Apply upgrade
+    target_size_raw[mask] = target_size_raw[mask].clip(lower=1)
 
     #Round to get Target Number of Contracts
     target_size = round(target_size_raw,0).astype(int)
