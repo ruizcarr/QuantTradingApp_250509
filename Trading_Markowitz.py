@@ -2,7 +2,9 @@
 import datetime
 
 import pandas as pd
-import numpy as np
+import numpy as np,random
+np.random.seed(42)
+random.seed(42)
 import matplotlib.pyplot as plt
 from datetime import date
 import time

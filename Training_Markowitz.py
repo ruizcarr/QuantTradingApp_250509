@@ -1,7 +1,9 @@
 #IMPORT RELEVANT MODULES
 
 #Import libraries and functions
-import numpy as np
+import numpy as np,random
+np.random.seed(42)
+random.seed(42)
 import pandas as pd
 import matplotlib.pyplot as plt
 import datetime

@@ -15,7 +15,7 @@ from Backtest_Vectorized_Class import compute_backtest_vectorized
 def main(settings):
 
     # Update Settings
-    settings['start'] = "2015-01-01"
+    settings['start'] = "2019-01-01"
 
     #Load data
     data_ind = mdf.Data_Ind_Feed(settings).data_ind
@@ -25,11 +25,10 @@ def main(settings):
     positions_mktw = get_trading_positions(data_ind, settings, indicators_dict)
 
     #Get Positions NQ_Gold
-    pos_nq_gc=data.tickers_returns
-    pos_nq_gc = pos_nq_gc.reindex(positions_mktw.index)
-    pos_nq_gc =pos_nq_gc *0
-    pos_nq_gc["NQ=F"]=0.5#np.where(positions_mktw["NQ=F"]>0.01,0.5,0)
-    pos_nq_gc["GC=F"] =0.5# np.where(positions_mktw["GC=F"]>0.01,0.5,0)
+    pos_nq_gc=positions_mktw*0
+    pos_nq_gc["NQ=F"]=0.4#np.where(positions_mktw["NQ=F"]>0.01,0.5,0)
+    pos_nq_gc["GC=F"] =0.4# np.where(positions_mktw["GC=F"]>0.01,0.5,0)
+    pos_nq_gc["cash"] = 0.2  # np.where(positions_mktw["cash"]>0.01,0.5,0)
 
     #Positions to Back Test
     positions=pos_nq_gc*0.5+positions_mktw*0.5
