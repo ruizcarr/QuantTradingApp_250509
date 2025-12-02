@@ -116,7 +116,7 @@ def main(settings):
         #Debug
         #st.write("After Load & Compute: settings end last date",settings['end'])
         #st.write(st.session_state)
-        st.write(closes.tail(10))
+        #st.write(closes.tail(10))
         # returns = closes.pct_change()
         #st.write(returns)
         #st.write(intraday_tickers_returns)
@@ -227,7 +227,8 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
     exposition = pos_value_today_eur / porfolio_value_today_eur * 100
 
     #Display Current Portfolio
-    n_col=len(settings["tickers"])+1
+    #n_col=len(settings["tickers"])+1
+    n_col = len(returns.columns) + 1
     #col_width_list=[2]+[1]*(n_col-1)
     col_width_list = [7] + [3] * (n_col - 1)
     cols=st.columns(col_width_list)
