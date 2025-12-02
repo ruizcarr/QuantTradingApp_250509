@@ -220,6 +220,8 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
     #Display Current Portfolio
     #n_col=len(settings["tickers"])+1
     n_col = len(returns.columns) + 1
+    st.write(returns.columns)
+    st.write(n_col)
     #col_width_list=[2]+[1]*(n_col-1)
     col_width_list = [7] + [3] * (n_col - 1)
     cols=st.columns(col_width_list)
