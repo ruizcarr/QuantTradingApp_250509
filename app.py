@@ -318,7 +318,7 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
     Always shows today's data based on 'add_days', avoiding system datetime.
     """
     #tickers = settings["tickers"].copy()
-    tickers = closes.columns()
+    tickers = closes.columns
     n_col = len(tickers) + 1
     col_width_list = [7] + [3] * (n_col - 1)
     cols = st.columns(col_width_list)
