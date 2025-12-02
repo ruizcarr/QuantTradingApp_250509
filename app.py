@@ -65,15 +65,6 @@ def main(settings):
         settings['qstats']=st.session_state.qstats
         #settings['do_BT'] = True
 
-
-
-        #Get Trading results
-        #log_history, _, data = compute(settings)
-
-        #Get tickers data
-        #closes=data.tickers_closes
-        #returns=data.tickers_returns
-
         #Debug
         #st.write("Before Load & Compute: settings end last date", settings["end"])
 
