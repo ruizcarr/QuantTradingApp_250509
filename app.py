@@ -115,6 +115,8 @@ def main(settings):
         #Process Log Data
         eod_log_history,trading_history=process_log_data(log_history,settings)
 
+        st.write(eod_log_history)
+
         #Returns by Ticker
         ret_by_ticker = returns[settings['tickers']] * eod_log_history[settings['tickers']]
 
