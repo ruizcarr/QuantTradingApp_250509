@@ -317,7 +317,7 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
     Display market data (closes or returns) for all tickers.
     Always shows today's data based on 'add_days', avoiding system datetime.
     """
-    tickers = settings["tickers"]
+    tickers = settings["tickers"].copy()
     if settings['add_cash']:
         tickers += ['cash']
     n_col = len(tickers) + 1
