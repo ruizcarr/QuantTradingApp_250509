@@ -112,6 +112,8 @@ def main(settings):
         #st.write(returns)
         #st.write(intraday_tickers_returns)
 
+        st.write(log_history)
+
         #Process Log Data
         eod_log_history,trading_history=process_log_data(log_history,settings)
 
