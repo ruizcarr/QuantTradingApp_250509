@@ -202,9 +202,11 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
     else:
         today=None
 
+    tickers=returns.columns
+
     #Get portfolio and trading of today
-    last_portfolio = eod_log_history.loc[:today].iloc[-1][settings['tickers']]
-    pre_portfolio = eod_log_history.loc[:today].iloc[-2][settings['tickers']]
+    last_portfolio = eod_log_history.loc[:today].iloc[-1][tickers]
+    pre_portfolio = eod_log_history.loc[:today].iloc[-2][tickers]
     last_trade = last_portfolio-pre_portfolio
 
     #Position & Portfolio Value at end of Today in USD and EUR
@@ -219,9 +221,7 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
 
     #Display Current Portfolio
     #n_col=len(settings["tickers"])+1
-    n_col = len(returns.columns) + 1
-    st.write(returns.columns)
-    st.write(n_col)
+    n_col = len(tickers) + 1
     #col_width_list=[2]+[1]*(n_col-1)
     col_width_list = [7] + [3] * (n_col - 1)
     cols=st.columns(col_width_list)
