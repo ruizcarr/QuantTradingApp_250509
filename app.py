@@ -204,6 +204,9 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
 
     tickers=returns.columns
 
+    st.write(tickers)
+    st.write(eod_log_history)
+
     #Get portfolio and trading of today
     last_portfolio = eod_log_history.loc[:today].iloc[-1][tickers]
     pre_portfolio = eod_log_history.loc[:today].iloc[-2][tickers]
