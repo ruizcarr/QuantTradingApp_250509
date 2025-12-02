@@ -192,7 +192,7 @@ def multiple_charts(charts_dict,chart_title=''):
 def process_log_data(log_history,settings):
 
     if settings['add_cash']:
-        tickers=settings['tickers'] + 'cash'
+        tickers=settings['tickers'] + ['cash']
 
     # Overwrite Drawdown YTD EUR
     max_portfolio_value_eur = log_history['portfolio_value_eur'].rolling(252, min_periods=5).max()
