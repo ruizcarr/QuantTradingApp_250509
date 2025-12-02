@@ -111,8 +111,7 @@ def main(settings):
         # returns = closes.pct_change()
         #st.write(returns)
         #st.write(intraday_tickers_returns)
-
-        st.write(log_history)
+        #st.write(log_history)
 
         #Process Log Data
         eod_log_history,trading_history=process_log_data(log_history,settings)
@@ -204,10 +203,8 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
     else:
         today=None
 
+    #Get tickers
     tickers=returns.columns
-
-    st.write(tickers)
-    st.write(eod_log_history)
 
     #Get portfolio and trading of today
     last_portfolio = eod_log_history.loc[:today].iloc[-1][tickers]

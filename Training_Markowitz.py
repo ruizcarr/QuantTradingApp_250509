@@ -191,8 +191,10 @@ def multiple_charts(charts_dict,chart_title=''):
 
 def process_log_data(log_history,settings):
 
-    if settings['add_cash']:
-        tickers=settings['tickers'] + ['cash']
+    # Add 'cash'
+    tickers = settings['tickers'].copy()
+    if settings.get('add_cash', False):
+        tickers = list(dict.fromkeys(tickers + ['cash']))
 
     # Overwrite Drawdown YTD EUR
     max_portfolio_value_eur = log_history['portfolio_value_eur'].rolling(252, min_periods=5).max()
@@ -200,7 +202,7 @@ def process_log_data(log_history,settings):
 
     #End of day Portfolio data
 
-    eod_log_history=log_history.drop_duplicates(subset='date', keep='last').set_index('date')[settings["tickers"]+["portfolio_value","portfolio_value_eur","pos_value","ddn","exchange_rate" , "dayly_profit","dayly_profit_eur"]]
+    eod_log_history=log_history.drop_duplicates(subset='date', keep='last').set_index('date')[tickers+["portfolio_value","portfolio_value_eur","pos_value","ddn","exchange_rate" , "dayly_profit","dayly_profit_eur"]]
 
     # Add Drawdown YTD EUR
     max_portfolio_value_eur = eod_log_history['portfolio_value_eur'].rolling(252, min_periods=5).max()
