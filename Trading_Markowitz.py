@@ -106,9 +106,8 @@ def compute(settings,data_ind):
 
             tickers_returns_mean=tickers_returns.rolling(220).mean().shift(1)
              #system_perfomance = (returns - tickers_returns).shift(1).rolling(22).sum()
-            system_perfomance =100*tickers_returns_mean* (nc - 1)
-            system_perf_idx = pd.DataFrame(np.sign(system_perfomance),
-                                           columns=tickers_returns.columns, index=tickers_returns.index)
+            #system_perfomance =100*tickers_returns_mean* (nc - 1)
+            #system_perf_idx = pd.DataFrame(np.sign(system_perfomance),columns=tickers_returns.columns, index=tickers_returns.index)
 
             tickers_cumret_fast_mean = tickers_cumret.rolling(3).mean().shift(1)
             tickers_cumret_slow_mean = tickers_cumret.rolling(220).mean().shift(1)
@@ -131,8 +130,8 @@ def compute(settings,data_ind):
                 #plot_df2['last_returns'] = last_returns[col]
                 #plot_df2['system_perfomance'] = system_perfomance[col]
                 #plot_df2['system_perf_idx'] = 10 * system_perf_idx[col]
-                plot_df2['tickers_cumret_fast_mean'] = 10*tickers_cumret_fast_mean[col]
-                plot_df2['tickers_cumret_slow_mean'] = 10*tickers_cumret_slow_mean[col]
+                #plot_df2['tickers_cumret_fast_mean'] = 10*tickers_cumret_fast_mean[col]
+                #plot_df2['tickers_cumret_slow_mean'] = 10*tickers_cumret_slow_mean[col]
                 plot_df2.plot(title=col + ' Returns')
 
 

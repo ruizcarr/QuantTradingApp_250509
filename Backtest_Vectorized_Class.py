@@ -45,8 +45,11 @@ class BacktestVectorized:
             startcash: float,
             exposition_lim: float,
             pos: pd.DataFrame,
-            max_iterations: int = 200
+            max_iterations: int = 200,
+            max_n_contracts: int = 50,
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
+
+
         """Execute backtest computation until positions converge or max iterations reached."""
         # Pre-allocate arrays for all iterations
         n_rows, n_cols = pos.shape
@@ -81,7 +84,7 @@ class BacktestVectorized:
             new_pos, new_portfolio, bt_log_dict = self.compute_backtest(
                 weights_div_asset_price, asset_price, opens, highs, lows, closes, mults,
                 current_portfolio, weights, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
-                exchange_rate, startcash_usd, startcash, exposition_lim, current_pos
+                exchange_rate, startcash_usd, startcash, exposition_lim, current_pos,max_n_contracts
             )
 
             # Store results for this iteration
@@ -129,7 +132,8 @@ class BacktestVectorized:
             startcash_usd: float,
             startcash: float,
             exposition_lim: float,
-            pos: pd.DataFrame
+            pos: pd.DataFrame,
+            max_n_contracts: int ,
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
         """Execute backtest computation."""
         bt_log_dict = {}
@@ -147,6 +151,13 @@ class BacktestVectorized:
         target_size_raw = weights_div_asset_price.multiply(portfolio_to_invest, axis=0).fillna(0)
         target_size_raw[target_size_raw > self.settings.upgrade_threshold] = target_size_raw.clip(lower=1)
         target_size = round(target_size_raw, 0).astype(int)
+
+        #Long Only
+        target_size=target_size.clip(lower=0)
+
+        #Clip max number of contracts
+        target_size = target_size.clip(upper=max_n_contracts)
+
         target_trade_size = target_size - prev_pos
 
         # Position Value & Exposition with Target Size
@@ -354,6 +365,9 @@ def compute_backtest_vectorized(
     startcash = settings['startcash']
     exposition_lim = settings['exposition_lim']
     commission = settings.get('commission', 5.0)
+    max_n_contracts = settings['max_n_contracts']
+
+
 
     # Get Open, High, Low, Closes from data_dict - optimize by using list comprehension
     desired_order = list(data_dict.keys())
@@ -408,7 +422,7 @@ def compute_backtest_vectorized(
     pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_until_convergence(
         weights_div_asset_price, asset_price, opens, highs, lows, closes, mults_array,
         portfolio_value_usd, positions, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
-        exchange_rate, startcash_usd, startcash, exposition_lim, pos
+        exchange_rate, startcash_usd, startcash, exposition_lim, pos,max_n_contracts=max_n_contracts
     )
 
     # Add Series to dict - optimize by updating directly

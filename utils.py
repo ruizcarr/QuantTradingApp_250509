@@ -27,6 +27,7 @@ def weighted_mean_of_dfs_dict(dfs_dict, weights_list):
   # Calculate the weighted mean
   weighted_mean_df = weighted_sum_df / sum_of_weights
 
+
   return weighted_mean_df
 
 def sigmoid(x,center=0, width=1,max=1):
@@ -111,8 +112,7 @@ def mean_positions(positions, vector_positions, upper_pos_lim,
     vector_positions = vector_positions.reindex(positions.index)
     positions = overall_f * (positions * sf + vector_positions * vf) / (sf + vf)
 
-    # Limit Upper individual position
-    positions=positions.clip(upper=upper_pos_lim)
+
 
     return positions
 

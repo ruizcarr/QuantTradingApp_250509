@@ -575,17 +575,17 @@ def compute_mkwtz_vectorized_local(markowitz_data_dict, metrics=True):
         [markowitz_data_dict[k] for k in
          ['returns','xs','volatility_xs', 'cagr_xs', 'opt_fun_xs']]
 
+
     # Localize index of xs where opt_fun is minimum
     opt_fun_min_idx_xs = np.argmin(opt_fun_xs, axis=1)
-
-    # opt_fun_xs values for opt_fun_min_idx_xs
-    opt_fun_min = np.take_along_axis(opt_fun_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
+    
+    # Get weights of this minimum
+    weights = xs[opt_fun_min_idx_xs]
 
     #Compare with previous values and keep if not relevant improvement
     #opt_fun_min_idx_xs, opt_fun_min=compare_min_vs_previous(opt_fun_xs,opt_fun_min_idx_xs,opt_fun_min,keep_treshold=0.01)
 
-    # Get weights of this minimum
-    weights = xs[opt_fun_min_idx_xs]
+
 
     #Apply opt_fun_min_factor inv proportional to value
     #opt_fun_factor = get_opt_fun_min_factor(opt_fun_min)
@@ -604,6 +604,8 @@ def compute_mkwtz_vectorized_local(markowitz_data_dict, metrics=True):
         metrics_opt_df = pd.DataFrame(index=returns.index)
         metrics_opt_df['volat'] = np.take_along_axis(volatility_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
         metrics_opt_df['ret'] = np.take_along_axis(cagr_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
+        # opt_fun_xs values for opt_fun_min_idx_xs
+        opt_fun_min = np.take_along_axis(opt_fun_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
         metrics_opt_df['opt_fun'] = opt_fun_min
 
         # All xs Metrics

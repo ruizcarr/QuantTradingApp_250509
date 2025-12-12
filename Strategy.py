@@ -48,11 +48,13 @@ class Strategy:
             self.v_weights_df, _, _, _, _, _ = compute_optimized_markowitz_d_w_m(st_tickers_returns, v_settings)
             self.weights_df = self.v_weights_df.copy()
 
+
         if settings['mkwtz_vectorized'] and settings['mkwtz_scipy']:
 
             #Make mean
             self.weights_df= mean_positions(self.s_weights_df,self.v_weights_df,settings['w_upper_lim'],
                                          sf = 1.0 ,vf = 1.0 ,overall_f = 1.0)
+
 
 
         if settings['apply_strategy_weights']:
@@ -61,6 +63,9 @@ class Strategy:
 
         else:
             positions=self.weights_df.copy()
+
+        # Limit Upper individual position
+        positions = positions.clip(upper=settings['w_upper_lim'])
 
 
         self.positions = positions.copy()
@@ -77,6 +82,8 @@ class Strategy:
             str(w): RollingMarkowitzWeights(w, p, settings['volatility_target'], st_tickers_returns,indicators_dict, settings)
             for w, p in zip(settings['mkwtz_ws'], settings['mkwtz_ps'])
         }
+
+
 
         def get_weights_df(tsw_dict, mkwtz_mean_fs, apply_opt_fun_predict_factor):
 
@@ -118,8 +125,12 @@ class Strategy:
                 opt_fun_predict_factor = None
 
             # Make weightged Mean
-            overall_f=1.25 #
-            weights_df = weighted_mean_of_dfs_dict(weights_dict, mkwtz_mean_fs) * overall_f
+            weights_df = weighted_mean_of_dfs_dict(weights_dict, mkwtz_mean_fs)
+
+            #weights_df = sum([df * weight for df, weight in zip(weights_dict.values(), mkwtz_mean_fs)])/ len(mkwtz_mean_fs)
+
+            overall_f = 1.25  #1.25
+            weights_df *=overall_f
 
             return weights_df, opt_fun_predict_factor, fun_df, weights_dict
 
@@ -131,14 +142,16 @@ class Strategy:
 
     def ApplyStrategyWeights(self, weights_df , ind_weights):
 
+
         # Combined Weights
-        w = ind_weights
+        w = ind_weights.copy()
 
         # Reindex as  weights_df index
-        w = w[w.index.isin(weights_df.index)]
+        #w = w[w.index.isin(weights_df.index)]
+        w = w.reindex(weights_df.index)[weights_df.columns]
 
         # Apply Pre Optimization with Combined Weights
-        positions=w * weights_df
+        positions= weights_df * w
 
         # Softed Test Positions
         #positions = raw_weight_pct * weights_df + (1 - raw_weight_pct) * positions
@@ -239,11 +252,14 @@ class RollingMarkowitzWeights:
 
         # Upsample to daily index and fill missing values
         results_by_period_df.set_index('end', inplace=True)
+        #print('results_by_period_df before reindex',results_by_period_df)
         results_dayly_df = results_by_period_df.reindex(self.tickers_returns.index).shift(1).fillna(method='ffill')
 
         # Separate weight and opt_fun DataFrames
         self.weights_df = results_dayly_df[self.tickers]
         self.opt_fun_df = results_dayly_df[['opt_fun']]
+
+        #print('self.weights_df at compute_RollingMarkowitzWeights',self.weights_df)
 
 
 

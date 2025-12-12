@@ -516,6 +516,8 @@ class WalkForwardTraining:
         test_positions = st.positions[startoftest:endoftest]
         test_returns = st.strategy_returns[startoftest:endoftest]
 
+        print('test_positions',test_positions)
+
         if self.settings['apply_post_opt']:
 
             test_weights = test_weights.mul(post_factor['post_factor'] ,axis=0)

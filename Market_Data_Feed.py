@@ -386,7 +386,7 @@ class Data:
         Only extends if 'start' is before available Yahoo data.
         """
         aka_dict = {'ES=F': '^GSPC', 'NQ=F': '^NDX', 'GC=F': 'GOLD',
-                    'EURUSD=X': 'EURUSD', 'CL=F': 'OIL'}
+                    'EURUSD=X': 'EURUSD', 'CL=F': 'OIL','BTC-USD': 'BTCUSD'}
         tickers = list(data_dict.keys())
 
         # Identify historical tickers
@@ -1002,13 +1002,13 @@ class Indicators:
         if 'cash' in self.comb_weights.columns:
             self.comb_weights['cash'] = self.Euribor_ind['cash']
 
-        if 'EURUSD=X' in self.comb_weights.columns:
-            self.comb_weights['EURUSD=X'] = 1
+        tickers_exceptions=['EURUSD=X','BTC-USD'] #
+        for ticker in tickers_exceptions:
+            if ticker in self.comb_weights.columns:
+                self.comb_weights[ticker] = 1
 
         #Final Clip
-        self.comb_weights =self.comb_weights.clip(upper=2.5,lower=0)
-
-
+        self.comb_weights =self.comb_weights.clip(upper=2.5,lower=0).fillna(1)
 
         #Get US FED Interest Rates
         #self.fed_df = get_fed_1year_treasury_yield_daily().reindex(tickers_returns.index, method="ffill")

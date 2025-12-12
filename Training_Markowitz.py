@@ -40,13 +40,14 @@ def run(settings):
 
     data_ind=mdf.Data_Ind_Feed(settings).data_ind
     data, indicators_dict = data_ind
-    tickers_returns=data.tickers_returns
+    #tickers_returns=data.tickers_returns
 
     end = time.time()
     times['get_data']= round(end - start,3)
 
     if settings['verbose']:
-        print(tickers_returns.iloc[:-settings['add_days']])
+        print(data.tickers_closes.iloc[:-settings['add_days']])
+        print(data.tickers_returns.iloc[:-settings['add_days']])
         print('Data & Indicators Ok',times['get_data'])
 
     # TRAINING

@@ -29,8 +29,8 @@ class MarkowitzWeights:
         self.settings = settings
         self.size = len(tickers_returns.columns)
         self.tickers=tickers_returns.columns
-        self.CAGR = np.mean(tickers_returns) * 252
-        contango_list=[settings['contango'][ticker] for ticker in self.tickers]
+        self.CAGR = tickers_returns.mean() * 252
+        contango_list=[settings['contango'][ticker] for ticker in tickers_returns.columns]
         self.CAGR = self.CAGR -np.array(contango_list)/100
         self.covariance_matrix = np.cov(tickers_returns.T) * 252
 
@@ -62,13 +62,21 @@ class MarkowitzWeights:
         ]
 
         #Bounds
-        bnds = [tickers_bounds[tick] for tick in self.tickers]
+        #bnds = [tickers_bounds[tick] for tick in self.tickers]
 
+        # Set bounds to (x,0) for negative CAGR assets
+        bnds = [(tickers_bounds[tick][0], 0.0) if np.abs(self.CAGR[i]) <= 0.001 else tickers_bounds[tick] for i, tick in enumerate(self.tickers)]
+        #print('self.CAGR',self.CAGR)
+        #print('bnds', bnds)
         #opt_fun arguments in adition to x
         args=(self.CAGR, self.covariance_matrix, volatility_target)
 
         # compute optimisation
         res=minimize(mkwtz_opt_fun, x0, args=args,constraints=cons, bounds=bnds, tol=0.0001, options={'maxiter': 100})
+
+        #if (self.CAGR < 0).any():
+        #    print('CAGR',self.CAGR)
+        #    print('x',res.x)
 
         return res
 
