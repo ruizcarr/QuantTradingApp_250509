@@ -246,7 +246,7 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
         delta_nc=int(last_trade[j])
         cols[i].metric(label=label,value=nc,delta=delta_nc)
         with cols[i]:
-            pos_value_today_eur_by_ticker=closes[ticker]*nc*exchange_rate*settings['mults'][ticker]
+            pos_value_today_eur_by_ticker=closes[ticker]#*nc*exchange_rate*settings['mults'][ticker]
             st.subheader(f"{pos_value_today_eur_by_ticker:,.0f} € ")
 
         #Chart weights evolution
