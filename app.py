@@ -138,7 +138,7 @@ def main(settings):
 
         #Display Portfolio Positions
         last_trade_date=trading_history.index[trading_history.index.to_series().dt.date<=today][-1]
-        display_portfolio_positions(eod_log_history,trading_history,last_trade_date,settings,ret_by_ticker,returns,closes,daysback=st.session_state.daysback)
+        display_portfolio_positions(eod_log_history,trading_history,last_trade_date,settings,ret_by_ticker,returns,closes_today,daysback=st.session_state.daysback)
 
         #Display Orders
         display_orders(log_history,settings)
@@ -232,11 +232,9 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
         st.write("Tickers:")
         st.write("Nbr of Contracts:")
         st.write(f"Last Trade date: {date}")
-        st.write(f"Position Value / Exposition @: {today}")
+        st.write(f"Position Value | Exposition @: {today}")
         #st.subheader(f"{pos_value_today:,.0f} USD /  {exposition:,.0f} %")
-        st.subheader(f"{pos_value_today_eur:,.0f} € /  {exposition:,.0f} %")
-
-
+        st.subheader(f"{pos_value_today_eur:,.0f} € |  {exposition:,.0f} %")
 
     for i in range(1,n_col):
         j=i-1
@@ -246,8 +244,9 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
         delta_nc=int(last_trade[j])
         cols[i].metric(label=label,value=nc,delta=delta_nc)
         with cols[i]:
-            pos_value_today_eur_by_ticker=closes_today[ticker]#*nc*exchange_rate*settings['mults'][ticker]
-            st.subheader(f"{pos_value_today_eur_by_ticker:,.0f} € ")
+            pos_value_today_eur_by_ticker=closes_today[ticker]*nc*exchange_rate*settings['mults'][ticker]
+            pos_pct_by_ticker = pos_value_today_eur_by_ticker / porfolio_value_today_eur * 100
+            st.write(f"{pos_value_today_eur_by_ticker:,.0f} € | {pos_pct_by_ticker:,.0f} %")
 
         #Chart weights evolution
 
