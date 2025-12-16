@@ -138,7 +138,7 @@ def main(settings):
 
         #Display Portfolio Positions
         last_trade_date=trading_history.index[trading_history.index.to_series().dt.date<=today][-1]
-        display_portfolio_positions(eod_log_history,trading_history,last_trade_date,settings,ret_by_ticker,returns,daysback=st.session_state.daysback)
+        display_portfolio_positions(eod_log_history,trading_history,last_trade_date,settings,ret_by_ticker,returns,closes,daysback=st.session_state.daysback)
 
         #Display Orders
         display_orders(log_history,settings)
@@ -155,7 +155,7 @@ def main(settings):
             if not next_trade_date:
                 st.write(f"**Keep Current Positions. No Trading Forecast within {settings['add_days']} Days**")
             else:
-                display_portfolio_positions(eod_log_history,trading_history,next_trade_date,settings,ret_by_ticker,returns,forecast=True)
+                display_portfolio_positions(eod_log_history,trading_history,next_trade_date,settings,ret_by_ticker,returns,closes,forecast=True)
 
         #Display Current Portfolio Value
         display_portfolio_results(eod_log_history,settings,daysback=st.session_state.daysback)
@@ -194,7 +194,7 @@ def main(settings):
 def get_daysback(chart_len_dict):
     st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
 
-def display_portfolio_positions(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,daysback=3*22+1,forecast=False):
+def display_portfolio_positions(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,closes,daysback=3*22+1,forecast=False):
 
     st.write(f"**Portfolio Positions:**")
     if not forecast:
@@ -242,11 +242,12 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
         j=i-1
         ticker=trading_history.columns[j]
         label=f"**{ticker}**"
-        value=int(last_portfolio[j])
-        delta=int(last_trade[j])
-        cols[i].metric(label=label,value=value,delta=delta)
+        nc=int(last_portfolio[j])
+        delta_nc=int(last_trade[j])
+        cols[i].metric(label=label,value=nc,delta=delta_nc)
         with cols[i]:
-            st.subheader(f"{pos_value_today_eur:,.0f} € ")
+            pos_value_today_eur_by_ticker=closes[ticker]*nc*exchange_rate*settings['mults'][ticker]
+            st.subheader(f"{pos_value_today_eur_by_ticker:,.0f} € ")
 
         #Chart weights evolution
 
