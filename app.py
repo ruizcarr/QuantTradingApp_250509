@@ -369,6 +369,8 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
             if cols[0].button("🔄 Refresh Data"):
                 st.cache_data.clear()
                 st.cache_resource.clear()
+                if cols[1].checkbox('Show Annalytics:', value=None, key='qstats'):
+                    st.session_state.qstats = True
                 st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid")
                 st.rerun() # <--- Force instant rerun
 
