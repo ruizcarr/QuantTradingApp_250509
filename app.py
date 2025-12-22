@@ -191,54 +191,52 @@ def main(settings):
 
                 # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
                 mobile_fix_css = """
-                <style>
-                    /* 1. Make the main container flexible */
-                    .container { 
-                        max-width: 100% !important; 
-                        width: 100% !important;
-                        display: flex !important;
-                        flex-direction: column !important;
-                        padding: 0 !important;
-                    }
+                    <style>
+                        /* 1. Force everything to collapse unnecessary height */
+                        body, .container, .row, div { 
+                            max-width: 100% !important; 
+                            height: auto !important; /* Forces containers to shrink to their content */
+                            min-height: 0 !important;
+                            margin: 0 !important;
+                            padding: 2px !important;
+                        }
 
-                    /* 2. Fix the Row/Column overlap (The key fix) */
-                    .row { 
-                        display: flex !important; 
-                        flex-wrap: wrap !important; /* Allows horizontal on desktop, vertical on mobile */
-                        width: 100% !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
+                        /* 2. Fix the horizontal wrap without gaps */
+                        .row { 
+                            display: flex !important; 
+                            flex-wrap: wrap !important;
+                            align-items: flex-start !important;
+                        }
 
-                    /* 3. Fix side-by-side elements (#left and #right) */
-                    #left, #right { 
-                        flex: 1 1 300px !important; /* Minimum 300px before wrapping */
-                        width: auto !important;
-                        float: none !important;
-                        margin: 5px !important;
-                    }
+                        /* 3. Target #left and #right specifically to stack on mobile */
+                        #left, #right { 
+                            flex: 1 1 320px !important; 
+                            width: 100% !important;
+                            float: none !important;
+                            margin-bottom: 10px !important; /* Minimal gap between blocks */
+                        }
 
-                    /* 4. Scale images properly without massive gaps */
-                    img { 
-                        max-width: 100% !important; 
-                        height: auto !important; 
-                        display: block !important;
-                        margin: 0 auto 10px auto !important; /* Small gap only at bottom */
-                    }
+                        /* 4. Fix Images (Charts) */
+                        img { 
+                            width: 100% !important; 
+                            max-width: 100% !important;
+                            height: auto !important; 
+                            display: block !important;
+                            margin: 5px 0 !important;
+                        }
 
-                    /* 5. Table cleanup */
-                    table { 
-                        width: 100% !important; 
-                        font-size: 11px !important; 
-                        margin-bottom: 5px !important;
-                    }
+                        /* 5. Kill empty spacers from the library */
+                        p, br { display: none !important; } 
+                        .table-container br, .table-container p { display: block !important; } /* Restore in tables only */
 
-                    /* Remove library-forced fixed widths */
-                    [style*="width: 960px"], [style*="width:960px"] {
-                        width: 100% !important;
-                    }
-                </style>
-                """
+                        /* 6. Table Font and Size */
+                        table { 
+                            font-size: 10px !important; 
+                            line-height: 1 !important;
+                            margin-bottom: 5px !important;
+                        }
+                    </style>
+                    """
 
                 # 5. Inyectar el CSS en el HTML
                 responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
