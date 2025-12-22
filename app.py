@@ -161,134 +161,134 @@ def main(settings):
         display_portfolio_results(eod_log_history,settings,daysback=st.session_state.daysback)
 
         # Show qstats annalitics HTML is a separate page
-        st.checkbox('Show Annalytics:', value=None, key='qstats')
-        if st.session_state.qstats:
-            from Backtest_Vectorized_Class import bt_qstats_report
-            q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename=bt_qstats_report(bt_log_dict, closes, settings["add_days"], exchange_rate)
+        #st.checkbox('Show Annalytics:', value=None, key='qstats')
+        #if st.session_state.qstats:
+        from Backtest_Vectorized_Class import bt_qstats_report
+        q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename=bt_qstats_report(bt_log_dict, closes, settings["add_days"], exchange_rate)
 
-            import streamlit.components.v1 as components
-            import quantstats_lumi as qs
-            import tempfile
-            import os
+        import streamlit.components.v1 as components
+        import quantstats_lumi as qs
+        import tempfile
+        import os
 
+        try:
+            # 1. Crear una ruta de archivo válida en la carpeta temporal del sistema
+            # Esto evita el ValueError y los problemas de permisos en Streamlit Cloud
+            temp_path = os.path.join(tempfile.gettempdir(), "qs_report.html")
+
+            # 2. Generar el informe. Pasamos el string de la ruta al parámetro 'output'
+            qs.reports.html(
+                q_returns,
+                title=q_title,
+                benchmark=q_benchmark,
+                benchmark_title=q_benchmark_ticker,
+                output=temp_path
+            )
+
+            # 2. Read and Modify the HTML for Mobile
+            with open(temp_path, "r", encoding="utf-8") as f:
+                html_content = f.read()
+
+            # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
+            mobile_fix_css = """
+                <style>
+                    /* 1. Eliminar alturas fijas que causan los huecos gigantes */
+                    div, .container, .row { 
+                        height: auto !important; 
+                        min-height: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        position: relative !important; /* Mantiene la visibilidad del gráfico */
+                    }
+
+                    /* 2. Forzar a los gráficos a ser compactos */
+                    img { 
+                        display: block !important; 
+                        width: 100% !important; 
+                        height: auto !important;
+                        margin: 0 auto !important; /* Centrado sin margen vertical */
+                    }
+
+                    /* 3. Eliminar los saltos de línea y párrafos vacíos de la librería */
+                    br, p { display: none !important; }
+
+                    /* 4. Ajustar las tablas de métricas para que no ocupen espacio extra */
+                    .table-container, table { 
+                        margin: 0% !important;
+                        padding: 25% !important;
+                        width: 100% !important;
+                        font-size: 8px !important;
+                    }
+
+                    /* 5. Títulos pequeños y pegados al gráfico */
+                    h4, h5 { 
+                        margin: 5px 0 2px 0 !important; 
+                        padding: 0 !important;
+                        font-size: 12px !important;
+                    }
+
+                    /* 6. Corregir el ancho de 960px que viene por defecto */
+                    [style*="width: 960px"], [style*="width:960px"] {
+                        width: 100% !important;
+                    }
+                </style>
+                """
+
+            # 5. Inyectar el CSS en el HTML
+            #responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
+
+            # 4. Display in Streamlit
+            #components.html(responsive_html, height=1000, scrolling=True)
+
+            # We encode the HTML to base64 so the browser can treat it as a standalone file
+            import base64
+
+            final_html = html_content.replace("</head>", mobile_fix_css + "</head>")
+
+            # 2. Codificar para pasar el contenido al script
+            b64_content = base64.b64encode(final_html.encode()).decode()
+
+            # 3. Script para abrir una ventana y escribir el contenido (Evita el bloqueo de data:uri)
+            # Usamos un botón de Streamlit que activa este JavaScript
+            st.components.v1.html(
+                f"""
+                <script>
+                function openReport() {{
+                    var htmlContent = atob("{b64_content}");
+                    var blob = new Blob([htmlContent], {{type: 'text/html'}});
+                    var url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                }}
+                </script>
+                <button onclick="openReport()" style="
+                    width: 100%; 
+                    padding: 12px; 
+                    background-color: #ff4b4b; 
+                    color: white; 
+                    border: none; 
+                    border-radius: 8px; 
+                    cursor: pointer; 
+                    font-weight: bold;
+                    font-size: 16px;">
+                    🚀 Show Annalitics
+                </button>
+                """,
+                height=70,
+            )
+
+
+        except Exception as e:
+            # 4. 'pass' asegura que si algo falla, la aplicación NO se detenga ni se reinicie
+            # Opcional: puedes poner st.warning(f"Error al generar reporte: {e}") si quieres saber qué pasó
+            pass
+
+        finally:
+            # 5. Limpieza: Intentar borrar el archivo temporal si existe
             try:
-                # 1. Crear una ruta de archivo válida en la carpeta temporal del sistema
-                # Esto evita el ValueError y los problemas de permisos en Streamlit Cloud
-                temp_path = os.path.join(tempfile.gettempdir(), "qs_report.html")
-
-                # 2. Generar el informe. Pasamos el string de la ruta al parámetro 'output'
-                qs.reports.html(
-                    q_returns,
-                    title=q_title,
-                    benchmark=q_benchmark,
-                    benchmark_title=q_benchmark_ticker,
-                    output=temp_path
-                )
-
-                # 2. Read and Modify the HTML for Mobile
-                with open(temp_path, "r", encoding="utf-8") as f:
-                    html_content = f.read()
-
-                # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
-                mobile_fix_css = """
-                    <style>
-                        /* 1. Eliminar alturas fijas que causan los huecos gigantes */
-                        div, .container, .row { 
-                            height: auto !important; 
-                            min-height: 0 !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            position: relative !important; /* Mantiene la visibilidad del gráfico */
-                        }
-
-                        /* 2. Forzar a los gráficos a ser compactos */
-                        img { 
-                            display: block !important; 
-                            width: 100% !important; 
-                            height: auto !important;
-                            margin: 0 auto !important; /* Centrado sin margen vertical */
-                        }
-
-                        /* 3. Eliminar los saltos de línea y párrafos vacíos de la librería */
-                        br, p { display: none !important; }
-
-                        /* 4. Ajustar las tablas de métricas para que no ocupen espacio extra */
-                        .table-container, table { 
-                            margin: 0% !important;
-                            padding: 25% !important;
-                            width: 100% !important;
-                            font-size: 8px !important;
-                        }
-
-                        /* 5. Títulos pequeños y pegados al gráfico */
-                        h4, h5 { 
-                            margin: 5px 0 2px 0 !important; 
-                            padding: 0 !important;
-                            font-size: 12px !important;
-                        }
-
-                        /* 6. Corregir el ancho de 960px que viene por defecto */
-                        [style*="width: 960px"], [style*="width:960px"] {
-                            width: 100% !important;
-                        }
-                    </style>
-                    """
-
-                # 5. Inyectar el CSS en el HTML
-                #responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
-
-                # 4. Display in Streamlit
-                #components.html(responsive_html, height=1000, scrolling=True)
-
-                # We encode the HTML to base64 so the browser can treat it as a standalone file
-                import base64
-
-                final_html = html_content.replace("</head>", mobile_fix_css + "</head>")
-
-                # 2. Codificar para pasar el contenido al script
-                b64_content = base64.b64encode(final_html.encode()).decode()
-
-                # 3. Script para abrir una ventana y escribir el contenido (Evita el bloqueo de data:uri)
-                # Usamos un botón de Streamlit que activa este JavaScript
-                st.components.v1.html(
-                    f"""
-                    <script>
-                    function openReport() {{
-                        var htmlContent = atob("{b64_content}");
-                        var blob = new Blob([htmlContent], {{type: 'text/html'}});
-                        var url = URL.createObjectURL(blob);
-                        window.open(url, '_blank');
-                    }}
-                    </script>
-                    <button onclick="openReport()" style="
-                        width: 100%; 
-                        padding: 12px; 
-                        background-color: #ff4b4b; 
-                        color: white; 
-                        border: none; 
-                        border-radius: 8px; 
-                        cursor: pointer; 
-                        font-weight: bold;
-                        font-size: 16px;">
-                        🚀 Open Report in a New Window
-                    </button>
-                    """,
-                    height=70,
-                )
-
-
-            except Exception as e:
-                # 4. 'pass' asegura que si algo falla, la aplicación NO se detenga ni se reinicie
-                # Opcional: puedes poner st.warning(f"Error al generar reporte: {e}") si quieres saber qué pasó
+                if 'temp_path' in locals() and os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except:
                 pass
-
-            finally:
-                # 5. Limpieza: Intentar borrar el archivo temporal si existe
-                try:
-                    if 'temp_path' in locals() and os.path.exists(temp_path):
-                        os.remove(temp_path)
-                except:
-                    pass
 
 
         #Input Display Options
