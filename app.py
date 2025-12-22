@@ -216,8 +216,8 @@ def main(settings):
                         .table-container, table { 
                             margin: 0 !important;
                             padding: 0 !important;
-                            width: 100% !important;
-                            font-size: 6px !important;
+                            width: 50% !important;
+                            font-size: 8px !important;
                         }
 
                         /* 5. Títulos pequeños y pegados al gráfico */
