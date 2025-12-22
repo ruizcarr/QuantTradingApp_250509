@@ -167,7 +167,10 @@ def main(settings):
             q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename=bt_qstats_report(bt_log_dict, closes, settings["add_days"], exchange_rate)
             import quantstats_lumi as quantstats
             try:
-                quantstats.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker)
+                quantstats.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker, output=True)
+                import webbrowser
+                webbrowser.open(q_filename)
+
             except ValueError:
                 # 'pass' tells Python to do absolutely nothing and move to the next line
                 pass
