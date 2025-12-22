@@ -304,12 +304,12 @@ def chart_ts_altair(ts,col,color="blue",st_altair_chart=True):
 x=alt.X('date', title=''),
 y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
 )
-    cols = st.columns(4)
+
     if st_altair_chart:
-        cols[0].st.altair_chart(alt_chart,use_container_width=True )
+        st.altair_chart(alt_chart,use_container_width=True )
 
     # Show qstats annalitics HTML is a separate page
-    cols[1].checkbox('Show Annalytics:', value=None, key='qstats')
+    st.checkbox('Show Annalytics:', value=None, key='qstats')
     st.write(settings['qstats'])
 
     return alt_chart
