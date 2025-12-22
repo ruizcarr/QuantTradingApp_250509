@@ -165,6 +165,8 @@ def main(settings):
         st.write(settings['qstats'])
         st.write(st.session_state.qstats)
 
+        from Backtest_Vectorized_Class import bt_qstats_report
+
         #Input Display Options
         with st.expander('Display Options:'):
             cols = st.columns(4)
