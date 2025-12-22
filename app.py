@@ -234,56 +234,8 @@ def main(settings):
                     </style>
                     """
 
-                # 4. CSS for Zero Gaps + Perfect Mobile Width
-                mobile_fix_css_good_ok_for_data = """
-                    <style>
-                        /* Force everything to full width and remove horizontal overflow */
-                        html, body, .container, .row, div { 
-                            width: 100% !important; 
-                            max-width: 100vw !important; 
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            height: auto !important;
-                            overflow-x: hidden !important; /* Prevents side-scrolling */
-                            box-sizing: border-box !important;
-                        }
 
-                        /* Stack #left and #right metrics vertically for mobile */
-                        #left, #right { 
-                            width: 100% !important;
-                            display: block !important;
-                            float: none !important;
-                            padding: 5px !important;
-                        }
-
-                        /* Force charts to fit the screen width perfectly */
-                        img { 
-                            width: 100% !important; 
-                            height: auto !important; 
-                            display: block !important;
-                            margin: 0 !important;
-                        }
-
-                        /* Make tables scrollable internally if they are too wide, 
-                           instead of pushing the whole page wide */
-                        .table-container, table { 
-                            width: 100% !important; 
-                            display: block !important;
-                            overflow-x: auto !important; 
-                            font-size: 10px !important;
-                        }
-
-                        /* Clean up spacing */
-                        br, p { display: none !important; }
-                        h4, h5 { padding: 5px !important; margin: 0 !important; }
-
-                        /* Overwrite the library's hardcoded 960px width */
-                        [style*="width: 960px"], [style*="width:960px"] {
-                            width: 100% !important;
-                        }
-                    </style>
-                    """
-                mobile_fix_css_almost = """
+                mobile_fix_css = """
                     <style>
                         /* 1. Reset de anchos para móvil */
                         html, body, .container { 
@@ -344,62 +296,7 @@ def main(settings):
                         }
                     </style>
                     """
-                mobile_fix_css = """
-                    <style>
-                        /* 1. Force all nested containers to collapse their ghost space */
-                        div, .row, .container { 
-                            height: auto !important; 
-                            min-height: 0 !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            float: none !important;
-                            display: block !important;
-                        }
 
-                        /* 2. Target the specific chart wrappers to kill the gaps */
-                        div[id^="plot-"], div[class*="plot"] {
-                            margin-bottom: -15px !important; /* Pulls the next chart UP */
-                            padding-bottom: 0 !important;
-                        }
-
-                        /* 3. Keep SVG Lines visible (Do not force display:block inside SVG) */
-                        svg, svg * { 
-                            display: inline !important; 
-                            visibility: visible !important;
-                        }
-
-                        /* 4. Scale images and remove their bottom padding */
-                        img { 
-                            width: 100% !important; 
-                            height: auto !important; 
-                            display: block !important;
-                            margin: 0 !important;
-                        }
-
-                        /* 5. Clean up first-page metrics (#left and #right) */
-                        #left, #right { 
-                            width: 100% !important; 
-                            margin: 0 0 5px 0 !important;
-                            padding: 0 !important;
-                        }
-
-                        /* 6. Remove all extra line breaks and empty spacers */
-                        br, p, hr { display: none !important; }
-
-                        /* 7. Fit tables to one-page width */
-                        table { 
-                            width: 100% !important; 
-                            font-size: 10px !important;
-                            margin: 0 !important;
-                            border-spacing: 0 !important;
-                        }
-
-                        /* Overwrite hardcoded 960px width for mobile */
-                        [style*="width: 960px"], [style*="width:960px"] {
-                            width: 100% !important;
-                        }
-                    </style>
-                    """
                 # 5. Inyectar el CSS en el HTML
                 responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
 
