@@ -204,7 +204,7 @@ def main(settings):
                         /* 2. Forzar a los gráficos a ser compactos */
                         img { 
                             display: block !important; 
-                            width: 100% !important; 
+                            width: 50% !important; 
                             height: auto !important;
                             margin: 0 auto !important; /* Centrado sin margen vertical */
                         }
