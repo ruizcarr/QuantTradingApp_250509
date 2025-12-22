@@ -175,29 +175,24 @@ def main(settings):
                 # 'pass' tells Python to do absolutely nothing and move to the next line
                 pass
 
-            import streamlit.components.v1 as components
-            import quantstats_lumi as qs
             import tempfile
             import os
 
+            # Create a valid string path in the system's temp folder
+            temp_path = os.path.join(tempfile.gettempdir(), "qs_report.html")
+
             try:
-                # Use a temporary file path
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
-                    report_path = tmp_file.name
-
-                # Generate the report using the valid path string
-                qs.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker, output=report_path)
-                #qs.reports.html(returns, benchmark="SPY", output=report_path)
-
-                # Read content and display it
-                with open(report_path, "r", encoding="utf-8") as f:
-                    html_content = f.read()
-                    components.html(html_content, height=1000, scrolling=True)
-
-            finally:
-                # Clean up the file path string we used
-                if os.path.exists(report_path):
-                    os.remove(report_path)
+                # Use the string path, NOT True
+                quantstats.reports.html(
+                    q_returns,
+                    title=q_title,
+                    benchmark=q_benchmark,
+                    benchmark_title=q_benchmark_ticker,
+                    output=temp_path
+                )
+            except Exception:
+                # This ensures that even if it fails, your app keeps running
+                pass
 
         #Input Display Options
         with st.expander('Display Options:'):
