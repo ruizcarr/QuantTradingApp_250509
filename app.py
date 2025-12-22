@@ -166,7 +166,7 @@ def main(settings):
             #Chart length
             #cols[0].selectbox('Chart Length:', chart_len_keys, key='chart_len_key',on_change=get_daysback)
             cols[1].selectbox('Data to Show:', ['returns', 'closes'],key='data_show')
-            cols[2].checkbox('Show Annalytics:',value=True,  key='qstats')
+            #cols[2].checkbox('Show Annalytics:',value=True,  key='qstats')
 
         #Display Log History
         with st.expander("See Historical Log:"):
@@ -304,9 +304,13 @@ def chart_ts_altair(ts,col,color="blue",st_altair_chart=True):
 x=alt.X('date', title=''),
 y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
 )
-
+    cols = st.columns(4)
     if st_altair_chart:
-        st.altair_chart(alt_chart,use_container_width=True )
+        cols[0].st.altair_chart(alt_chart,use_container_width=True )
+
+    # Show qstats annalitics HTML is a separate page
+    cols[1].checkbox('Show Annalytics:', value=None, key='qstats')
+    st.write(settings['qstats'])
 
     return alt_chart
 
@@ -365,9 +369,6 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
             if "last_refresh" not in st.session_state:
                 st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid")
 
-            cols[0].checkbox('Show Annalytics:', value=None, key='qstats')
-
-            st.write(settings['qstats'])
 
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh Data"):

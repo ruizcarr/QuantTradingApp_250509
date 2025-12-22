@@ -397,20 +397,8 @@ def compute_backtest_vectorized(
 
     # Quantstats Report
     if settings.get('qstats', False):
-        q_title = 'Cash Backtest Markowitz Vectorized'
-        path = "results\\"
-        q_filename = os.path.abspath(path + q_title + '.html')
-        q_returns = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-settings['add_days']]
-        q_returns.index = pd.to_datetime(q_returns.index, utc=True).tz_convert(None)
 
-        q_benchmark_ticker = 'ES=F'
-        q_benchmark = (closes[q_benchmark_ticker] * exchange_rate).pct_change().iloc[:-settings['add_days']]
-        q_benchmark.index = pd.to_datetime(q_benchmark.index, utc=True).tz_convert(None)
-
-        import quantstats_lumi as quantstats
-        quantstats.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker, output=q_filename)
-        import webbrowser
-        webbrowser.open(q_filename)
+        bt_qstats_report(bt_log_dict, closes,settings['add_days'],exchange_rate)
 
     return bt_log_dict, log_history
 
@@ -642,3 +630,22 @@ def get_log_dict_by_ticker_dict(bt_log_dict, tickers):
         bt_log_by_ticker_dict[ticker] = df
 
     return bt_log_by_ticker_dict
+
+
+def bt_qstats_report(bt_log_dict, closes,add_days,exchange_rate):
+    q_title = 'Cash Backtest Markowitz Vectorized'
+    path = "results\\"
+    q_filename = os.path.abspath(path + q_title + '.html')
+    q_returns = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-add_days]
+    q_returns.index = pd.to_datetime(q_returns.index, utc=True).tz_convert(None)
+
+    q_benchmark_ticker = 'ES=F'
+    q_benchmark = (closes[q_benchmark_ticker] * exchange_rate).pct_change().iloc[:-add_days]
+    q_benchmark.index = pd.to_datetime(q_benchmark.index, utc=True).tz_convert(None)
+
+    import quantstats_lumi as quantstats
+    quantstats.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker, output=q_filename)
+    import webbrowser
+    webbrowser.open(q_filename)
+
+    return
