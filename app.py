@@ -185,10 +185,24 @@ def main(settings):
                     output=temp_path
                 )
 
-                # 3. Leer el archivo generado y mostrarlo dentro de Streamlit
+                # 2. Read and Modify the HTML for Mobile
                 with open(temp_path, "r", encoding="utf-8") as f:
                     html_content = f.read()
-                    components.html(html_content, height=1000, scrolling=True)
+
+                # 3. Inject CSS to force responsiveness
+                # This overrides the 960px fixed width and makes images/tables fit the screen
+                mobile_css = """
+                    <style>
+                        .container { max-width: 100% !important; margin: 0 !important; padding: 10px !important; }
+                        #left, #right { width: 100% !important; float: none !important; margin: 0 !important; }
+                        img, svg { max-width: 100% !important; height: auto !important; }
+                        table { width: 100% !important; font-size: 10px !important; } /* Smaller font for mobile tables */
+                    </style>
+                    """
+                responsive_html = html_content.replace("</head>", mobile_css + "</head>")
+
+                # 4. Display in Streamlit
+                components.html(responsive_html, height=1000, scrolling=True)
 
             except Exception as e:
                 # 4. 'pass' asegura que si algo falla, la aplicación NO se detenga ni se reinicie
