@@ -214,9 +214,9 @@ def main(settings):
 
                         /* 4. Ajustar las tablas de métricas para que no ocupen espacio extra */
                         .table-container, table { 
-                            margin: 0 !important;
+                            margin: 100% !important;
                             padding: 25% !important;
-                            width: 150% !important;
+                            width: 100% !important;
                             font-size: 8px !important;
                         }
 
