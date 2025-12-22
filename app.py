@@ -138,7 +138,7 @@ def main(settings):
 
         #Display Portfolio Positions
         last_trade_date=trading_history.index[trading_history.index.to_series().dt.date<=today][-1]
-        display_portfolio_positions(eod_log_history,trading_history,last_trade_date,settings,ret_by_ticker,returns,closes_today,daysback=st.session_state.daysback)
+        exchange_rate=display_portfolio_positions(eod_log_history,trading_history,last_trade_date,settings,ret_by_ticker,returns,closes_today,daysback=st.session_state.daysback)
 
         #Display Orders
         display_orders(log_history,settings)
@@ -155,7 +155,7 @@ def main(settings):
             if not next_trade_date:
                 st.write(f"**Keep Current Positions. No Trading Forecast within {settings['add_days']} Days**")
             else:
-                display_portfolio_positions(eod_log_history,trading_history,next_trade_date,settings,ret_by_ticker,returns,closes_today,forecast=True)
+                exchange_rate=display_portfolio_positions(eod_log_history,trading_history,next_trade_date,settings,ret_by_ticker,returns,closes_today,forecast=True)
 
         #Display Current Portfolio Value
         display_portfolio_results(eod_log_history,settings,daysback=st.session_state.daysback)
@@ -164,8 +164,9 @@ def main(settings):
         st.checkbox('Show Annalytics:', value=None, key='qstats')
         st.write(settings['qstats'])
         st.write(st.session_state.qstats)
-
-        from Backtest_Vectorized_Class import bt_qstats_report
+        if st.session_state.qstats:
+            from Backtest_Vectorized_Class import bt_qstats_report
+            bt_qstats_report(bt_log_dict, closes, settings["add_days"], exchange_rate)
 
         #Input Display Options
         with st.expander('Display Options:'):
@@ -269,6 +270,8 @@ def display_portfolio_positions(eod_log_history,trading_history,date,settings,re
                 alt_chart1=chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
                 alt_chart2 = chart_ts_altair(cum_ret,  ticker, color="grey", st_altair_chart=False)
                 st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
+
+    return exchange_rate
 
 
 def display_portfolio_results(eod_log_history, settings, daysback=3*22):
