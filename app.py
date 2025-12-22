@@ -216,7 +216,7 @@ def main(settings):
                         .table-container, table { 
                             margin: 0 !important;
                             padding: 25% !important;
-                            width: 100% !important;
+                            width: 150% !important;
                             font-size: 8px !important;
                         }
 
