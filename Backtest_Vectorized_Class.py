@@ -648,4 +648,4 @@ def bt_qstats_report(bt_log_dict, closes,add_days,exchange_rate):
     import webbrowser
     webbrowser.open(q_filename)
 
-    return
+    return q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename
