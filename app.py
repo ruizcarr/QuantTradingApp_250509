@@ -189,40 +189,54 @@ def main(settings):
                 with open(temp_path, "r", encoding="utf-8") as f:
                     html_content = f.read()
 
-                # 4. Optimized CSS for Mobile (Balanced spacing)
+                # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
                 mobile_fix_css = """
                 <style>
-                    /* Container settings */
-                    body, .container { 
+                    /* 1. Make the main container flexible */
+                    .container { 
                         max-width: 100% !important; 
-                        margin: 0 !important; 
-                        padding: 5px !important; 
-                    }
-
-                    /* Fix Overlap without huge gaps */
-                    /* Only apply stacking to rows and images */
-                    .row, img { 
-                        display: block !important; 
-                        float: none !important; 
                         width: 100% !important;
-                        margin-bottom: 10px !important; /* Small, consistent gap */
-                        clear: both !important;
+                        display: flex !important;
+                        flex-direction: column !important;
+                        padding: 0 !important;
                     }
 
-                    /* Adjust image scaling */
+                    /* 2. Fix the Row/Column overlap (The key fix) */
+                    .row { 
+                        display: flex !important; 
+                        flex-wrap: wrap !important; /* Allows horizontal on desktop, vertical on mobile */
+                        width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+
+                    /* 3. Fix side-by-side elements (#left and #right) */
+                    #left, #right { 
+                        flex: 1 1 300px !important; /* Minimum 300px before wrapping */
+                        width: auto !important;
+                        float: none !important;
+                        margin: 5px !important;
+                    }
+
+                    /* 4. Scale images properly without massive gaps */
                     img { 
+                        max-width: 100% !important; 
                         height: auto !important; 
+                        display: block !important;
+                        margin: 0 auto 10px auto !important; /* Small gap only at bottom */
                     }
 
-                    /* Ensure tables don't have massive bottom margins */
-                    table, .table-container { 
+                    /* 5. Table cleanup */
+                    table { 
+                        width: 100% !important; 
+                        font-size: 11px !important; 
                         margin-bottom: 5px !important;
-                        width: 100% !important;
-                        font-size: 11px !important;
                     }
 
-                    /* Hide unnecessary large spacers if they exist */
-                    hr { margin: 10px 0 !important; }
+                    /* Remove library-forced fixed widths */
+                    [style*="width: 960px"], [style*="width:960px"] {
+                        width: 100% !important;
+                    }
                 </style>
                 """
 
