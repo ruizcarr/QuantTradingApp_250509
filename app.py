@@ -190,7 +190,7 @@ def main(settings):
                     html_content = f.read()
 
                 # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
-                mobile_fix_css = """
+                mobile_fix_css_ok = """
                     <style>
                         /* 1. Eliminar alturas fijas que causan los huecos gigantes */
                         div, .container, .row { 
@@ -228,6 +228,56 @@ def main(settings):
                         }
 
                         /* 6. Corregir el ancho de 960px que viene por defecto */
+                        [style*="width: 960px"], [style*="width:960px"] {
+                            width: 100% !important;
+                        }
+                    </style>
+                    """
+
+                # 4. CSS for Zero Gaps + Perfect Mobile Width
+                mobile_fix_css = """
+                    <style>
+                        /* Force everything to full width and remove horizontal overflow */
+                        html, body, .container, .row, div { 
+                            width: 100% !important; 
+                            max-width: 100vw !important; 
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            height: auto !important;
+                            overflow-x: hidden !important; /* Prevents side-scrolling */
+                            box-sizing: border-box !important;
+                        }
+
+                        /* Stack #left and #right metrics vertically for mobile */
+                        #left, #right { 
+                            width: 100% !important;
+                            display: block !important;
+                            float: none !important;
+                            padding: 5px !important;
+                        }
+
+                        /* Force charts to fit the screen width perfectly */
+                        img { 
+                            width: 100% !important; 
+                            height: auto !important; 
+                            display: block !important;
+                            margin: 0 !important;
+                        }
+
+                        /* Make tables scrollable internally if they are too wide, 
+                           instead of pushing the whole page wide */
+                        .table-container, table { 
+                            width: 100% !important; 
+                            display: block !important;
+                            overflow-x: auto !important; 
+                            font-size: 10px !important;
+                        }
+
+                        /* Clean up spacing */
+                        br, p { display: none !important; }
+                        h4, h5 { padding: 5px !important; margin: 0 !important; }
+
+                        /* Overwrite the library's hardcoded 960px width */
                         [style*="width: 960px"], [style*="width:960px"] {
                             width: 100% !important;
                         }
