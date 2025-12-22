@@ -189,39 +189,40 @@ def main(settings):
                 with open(temp_path, "r", encoding="utf-8") as f:
                     html_content = f.read()
 
-                # 4. CSS Correcto para evitar solapamiento y ajustar a móvil
+                # 4. Optimized CSS for Mobile (Balanced spacing)
                 mobile_fix_css = """
                 <style>
-                    /* Ajuste de ancho total */
+                    /* Container settings */
                     body, .container { 
                         max-width: 100% !important; 
                         margin: 0 !important; 
-                        padding: 10px !important; 
+                        padding: 5px !important; 
                     }
 
-                    /* SOLUCIÓN AL SOLAPAMIENTO: Forzar apilamiento vertical */
-                    .row, div, img, .table-container { 
-                        width: 100% !important; 
+                    /* Fix Overlap without huge gaps */
+                    /* Only apply stacking to rows and images */
+                    .row, img { 
                         display: block !important; 
                         float: none !important; 
-                        position: relative !important;
-                        margin-bottom: 30px !important; /* Espacio real entre gráficos */
+                        width: 100% !important;
+                        margin-bottom: 10px !important; /* Small, consistent gap */
                         clear: both !important;
                     }
 
-                    /* Escalar imágenes de gráficos */
+                    /* Adjust image scaling */
                     img { 
-                        width: 100% !important; 
                         height: auto !important; 
                     }
 
-                    /* Tablas legibles en móvil */
-                    table { 
-                        font-size: 11px !important; 
-                        display: block !important;
-                        overflow-x: auto !important;
-                        white-space: nowrap !important;
+                    /* Ensure tables don't have massive bottom margins */
+                    table, .table-container { 
+                        margin-bottom: 5px !important;
+                        width: 100% !important;
+                        font-size: 11px !important;
                     }
+
+                    /* Hide unnecessary large spacers if they exist */
+                    hr { margin: 10px 0 !important; }
                 </style>
                 """
 
