@@ -367,6 +367,8 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
 
             cols[0].checkbox('Show Annalytics:', value=None, key='qstats')
 
+            st.write(settings['qstats'])
+
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh Data"):
                 st.cache_data.clear()
