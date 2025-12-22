@@ -190,7 +190,7 @@ def main(settings):
                     html_content = f.read()
 
                 # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
-                mobile_fix_css_ok = """
+                mobile_fix_css = """
                     <style>
                         /* 1. Eliminar alturas fijas que causan los huecos gigantes */
                         div, .container, .row { 
@@ -228,69 +228,6 @@ def main(settings):
                         }
 
                         /* 6. Corregir el ancho de 960px que viene por defecto */
-                        [style*="width: 960px"], [style*="width:960px"] {
-                            width: 100% !important;
-                        }
-                    </style>
-                    """
-
-
-                mobile_fix_css = """
-                    <style>
-                        /* 1. Reset de anchos para móvil */
-                        html, body, .container { 
-                            width: 100% !important; 
-                            max-width: 100vw !important; 
-                            margin: 0 !important; 
-                            padding: 2px !important;
-                            overflow-x: hidden !important;
-                        }
-
-                        /* 2. Eliminar huecos gigantes pero MANTENER visibilidad de líneas */
-                        div, .row { 
-                            height: auto !important; 
-                            min-height: 0 !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            display: block !important;
-                            position: relative !important;
-                        }
-
-                        /* 3. IMPORTANTE: NO aplicar display:block a los elementos internos de los gráficos */
-                        /* Esto asegura que las líneas (SVG paths) sean visibles */
-                        svg, svg * { 
-                            display: inline !important; 
-                            visibility: visible !important;
-                        }
-
-                        /* 4. Ajustar imágenes de gráficos */
-                        img { 
-                            width: 100% !important; 
-                            height: auto !important; 
-                            display: block !important;
-                            margin-bottom: 5px !important;
-                        }
-
-                        /* 5. Apilar métricas de la primera página (#left y #right) */
-                        #left, #right { 
-                            width: 100% !important; 
-                            float: none !important; 
-                            display: block !important;
-                            margin: 0 0 10px 0 !important;
-                        }
-
-                        /* 6. Limpiar espacios vacíos manuales */
-                        br, p { display: none !important; }
-                        .table-container br { display: block !important; } /* Permitir en tablas */
-
-                        /* 7. Forzar tablas a ancho de página */
-                        table { 
-                            width: 100% !important; 
-                            font-size: 10px !important;
-                            margin-bottom: 5px !important;
-                        }
-
-                        /* Quitar el ancho fijo de 960px */
                         [style*="width: 960px"], [style*="width:960px"] {
                             width: 100% !important;
                         }
