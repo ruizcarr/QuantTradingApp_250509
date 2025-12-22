@@ -192,46 +192,45 @@ def main(settings):
                 # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
                 mobile_fix_css = """
                     <style>
-                        /* Force every single element to have zero margin/padding/height */
-                        * { 
-                            margin: 0 !important; 
-                            padding: 0 !important; 
+                        /* 1. Eliminar alturas fijas que causan los huecos gigantes */
+                        div, .container, .row { 
                             height: auto !important; 
                             min-height: 0 !important;
-                            position: static !important; /* Disables library's absolute positioning */
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            position: relative !important; /* Mantiene la visibilidad del gráfico */
                         }
 
-                        /* Basic container padding so it doesn't touch screen edges */
-                        body, .container { 
-                            padding: 2px !important;
-                            max-width: 100% !important;
-                            display: block !important;
-                        }
-
-                        /* Ensure images (charts) are blocks and fill width */
+                        /* 2. Forzar a los gráficos a ser compactos */
                         img { 
                             display: block !important; 
                             width: 100% !important; 
-                            margin-bottom: -5px !important; /* Aggressive negative margin to close gaps */
+                            height: auto !important;
+                            margin: 0 auto !important; /* Centrado sin margen vertical */
                         }
 
-                        /* Tables need a tiny bit of space to be readable */
-                        table { 
-                            display: table !important; 
-                            width: 100% !important; 
-                            margin: 2px 0 !important;
+                        /* 3. Eliminar los saltos de línea y párrafos vacíos de la librería */
+                        br, p { display: none !important; }
+
+                        /* 4. Ajustar las tablas de métricas para que no ocupen espacio extra */
+                        .table-container, table { 
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            width: 100% !important;
                             font-size: 10px !important;
                         }
 
-                        /* Re-enable display for titles so we know what charts are */
-                        h1, h2, h3, h4, h5 { 
-                            display: block !important; 
-                            margin-top: 5px !important;
-                            font-size: 14px !important;
+                        /* 5. Títulos pequeños y pegados al gráfico */
+                        h4, h5 { 
+                            margin: 5px 0 2px 0 !important; 
+                            padding: 0 !important;
+                            font-size: 12px !important;
                         }
 
-                        /* Kill all forced line breaks and paragraphs */
-                        br, p { display: none !important; }
+                        /* 6. Corregir el ancho de 960px que viene por defecto */
+                        [style*="width: 960px"], [style*="width:960px"] {
+                            width: 100% !important;
+                        }
                     </style>
                     """
 
