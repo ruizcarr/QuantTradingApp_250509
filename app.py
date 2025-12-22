@@ -242,18 +242,7 @@ def main(settings):
 
                 # We encode the HTML to base64 so the browser can treat it as a standalone file
                 import base64
-                # 1. Preparar el HTML con tus correcciones móviles
-                if False:
-                    mobile_fix_css = """
-                    <style>
-                        body, .container { width: 100% !important; max-width: 100vw !important; margin: 0 !important; padding: 5px !important; }
-                        div, .row { height: auto !important; margin: 0 !important; display: block !important; }
-                        img { width: 100% !important; height: auto !important; margin-bottom: -10px !important; }
-                        #left, #right { width: 100% !important; float: none !important; }
-                        br, p { display: none !important; }
-                        [style*="width: 960px"] { width: 100% !important; }
-                    </style>
-                    """
+
                 final_html = html_content.replace("</head>", mobile_fix_css + "</head>")
 
                 # 2. Codificar para pasar el contenido al script
