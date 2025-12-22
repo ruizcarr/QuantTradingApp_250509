@@ -166,7 +166,7 @@ def main(settings):
             #Chart length
             #cols[0].selectbox('Chart Length:', chart_len_keys, key='chart_len_key',on_change=get_daysback)
             cols[1].selectbox('Data to Show:', ['returns', 'closes'],key='data_show')
-            cols[2].checkbox('Show Annalytics:',value=None,  key='qstats')
+            cols[2].checkbox('Show Annalytics:',value=True,  key='qstats')
 
         #Display Log History
         with st.expander("See Historical Log:"):

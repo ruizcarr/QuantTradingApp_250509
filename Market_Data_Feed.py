@@ -77,7 +77,7 @@ class Data:
             raise FileNotFoundError("Offline mode and no saved CSV available")
         """
 
-        #print("last data_bundle date after Load",self.data_bundle.index[-1])
+        print("last data_bundle date after Load",self.data_bundle.index[-1])
 
         # -----------------------------
         # 2️⃣ Sanitize data_bundle
@@ -296,7 +296,8 @@ class Data:
             start=start,
             end=yf_end,
             group_by="ticker",
-            progress=False
+            progress=False,
+            timeout=30  # Increase from default to 30 seconds
         ).dropna()
 
         #print("data_bundle before change index",data_bundle.index)
@@ -991,8 +992,12 @@ class Indicators:
         Euribor_series = tickers_returns['cash'] * 255 * 100
         self.Euribor_ind = get_Euribor_ind(Euribor_series)
 
+        #RSI Curve weight
+        #from RSIstudy import get_rsi_curve_weight
+        #self.rsi_curve_weight = get_rsi_curve_weight(tickers_returns)
+
         # Combined Weights
-        self.comb_weights =  self.rsi_reverse_keep_weights * self.norm_weights *self.Euribor_ind # * self.exp_weights * self.rsi_sigmoid_weight * m_trend_weights #* trend_corr_high#  * rsi_weights * chopp_factor #* boll_pct_weights
+        self.comb_weights =   self.rsi_reverse_keep_weights *self.norm_weights *self.Euribor_ind #+ self.rsi_curve_weight #  * self.exp_weights * self.rsi_sigmoid_weight * m_trend_weights #* trend_corr_high#  * rsi_weights * chopp_factor #* boll_pct_weights
 
         # Softed Factor
         raw_weight_pct =settings['raw_weight_pct']

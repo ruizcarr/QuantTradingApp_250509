@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class BacktestSettings:
     """Settings for backtest execution."""
     upgrade_threshold: float = 0.20
-    commission: float = 5.0
+    commision: float = 5.0
     buy_at_market: bool = False
     portfolio_window: int = 22 * 12
     min_periods: int = 1
@@ -255,7 +255,7 @@ class BacktestVectorized:
         exec_time = exec_time.where(~(broker_event == 'Canceled'), exec_time_cancel)
 
         # Calculate trading costs
-        trading_cost = exec_size.abs() * self.settings.commission
+        trading_cost = exec_size.abs() * self.settings.commision
 
         # Update positions
         is_trading_day = (broker_event == 'Executed')
@@ -308,7 +308,7 @@ class BacktestVectorized:
             'exectype': exectype,
             'size': target_trade_size,
             'price': round(prices, 3),
-            'commission': updated_pos * 0,  # Initialize with zeros
+            'commision': updated_pos * 0,  # Initialize with zeros
         }
 
         bt_log_dict['broker_dict'] = {
@@ -320,7 +320,7 @@ class BacktestVectorized:
             'exectype': exectype,
             'size': exec_size,
             'price': round(exec_price.astype(float), 3),
-            'commission': trading_cost,
+            'commision': trading_cost,
         }
 
         # Add position and portfolio values
@@ -349,57 +349,20 @@ def compute_backtest_vectorized(
 ) -> Tuple[pd.DataFrame, Dict]:
     """Main entry point for vectorized backtest computation."""
 
-    # Determine common index between positions and all tickers in data_dict
-    common_index = positions.index
-    for df in data_dict.values():
-        common_index = common_index.intersection(df.index)
+    #Get Sanitized Index Data
+    positions, data_dict, opens, highs, lows, closes = sanitize_dataset(positions, data_dict)
 
-    # Reindex positions and all OHLCs to this common index
-    positions = positions.reindex(common_index).fillna(0)
-
-    for tick, df in data_dict.items():
-        data_dict[tick] = df.reindex(common_index).fillna(method='ffill')
-
-    # Data from settings
-    mults = settings['mults']
-    startcash = settings['startcash']
-    exposition_lim = settings['exposition_lim']
-    commission = settings.get('commission', 5.0)
-    max_n_contracts = settings['max_n_contracts']
-
-
-
-    # Get Open, High, Low, Closes from data_dict - optimize by using list comprehension
-    desired_order = list(data_dict.keys())
-
-    # Optimize by creating DataFrames directly without intermediate dictionary
-    opens = pd.concat([data_dict[key]['Open'] for key in desired_order], axis=1, keys=desired_order)
-    highs = pd.concat([data_dict[key]['High'] for key in desired_order], axis=1, keys=desired_order)
-    lows = pd.concat([data_dict[key]['Low'] for key in desired_order], axis=1, keys=desired_order)
-    closes = pd.concat([data_dict[key]['Close'] for key in desired_order], axis=1, keys=desired_order)
-
-    # Start - optimize by using boolean mask directly
-    start_mask = (positions > 0).any(axis=1)
-    start = positions[start_mask].index[0]
-
-    # Set Start at positions and Tickers Data - optimize by using slicing
-    positions = positions.loc[start:]
-    opens = opens.loc[start:]
-    highs = highs.loc[start:]
-    lows = lows.loc[start:]
-    closes = closes.loc[start:]
+    # Get settings values from settings
+    mults_array,startcash, exposition_lim, commision, max_n_contracts=get_settings_values(settings,positions.columns)
 
     # Get Buy/Sell Triggers & Stop Prices
     buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(positions,closes, lows, highs)
-
-    # mult dict to list in the tickers order - optimize by using list comprehension
-    mults_array = np.array([mults[tick] for tick in closes.columns])
 
     # Get historical of Exchange Rate EUR/USD (day after)
     exchange_rate = 1 / closes["EURUSD=X"].shift(1).fillna(method='bfill')
 
     # Set cash start
-    startcash_usd = startcash / exchange_rate[start]  # USD
+    startcash_usd = startcash / exchange_rate.iloc[0]  # USD
 
     # Initialize Portfolio Value, Positions, orders
     portfolio_value_usd = pd.Series(startcash_usd, index=positions.index)
@@ -411,7 +374,7 @@ def compute_backtest_vectorized(
     # Create backtest instance with settings - reuse the same instance
     backtest_settings = BacktestSettings(
         upgrade_threshold=settings.get('upgrade_threshold', 0.20),
-        commission=commission,
+        commision=commision,
         buy_at_market=settings.get('buy_at_market', False)
     )
 
@@ -451,6 +414,55 @@ def compute_backtest_vectorized(
 
     return bt_log_dict, log_history
 
+def sanitize_dataset(positions,data_dict):
+
+    # Determine common index between positions and all tickers in data_dict
+    common_index = positions.index
+    for df in data_dict.values():
+        common_index = common_index.intersection(df.index)
+
+    # Reindex positions and all OHLCs to this common index
+    positions = positions.reindex(common_index).fillna(0)
+
+    for tick, df in data_dict.items():
+        data_dict[tick] = df.reindex(common_index).fillna(method='ffill')
+
+    # Get Open, High, Low, Closes from data_dict - optimize by using list comprehension
+    desired_order = list(data_dict.keys())
+
+    # Optimize by creating DataFrames directly without intermediate dictionary
+    opens = pd.concat([data_dict[key]['Open'] for key in desired_order], axis=1, keys=desired_order)
+    highs = pd.concat([data_dict[key]['High'] for key in desired_order], axis=1, keys=desired_order)
+    lows = pd.concat([data_dict[key]['Low'] for key in desired_order], axis=1, keys=desired_order)
+    closes = pd.concat([data_dict[key]['Close'] for key in desired_order], axis=1, keys=desired_order)
+
+    # Start - optimize by using boolean mask directly
+    start_mask = (positions > 0).any(axis=1)
+    start = positions[start_mask].index[0]
+
+    # Set Start at positions and Tickers Data - optimize by using slicing
+    positions = positions.loc[start:]
+    opens = opens.loc[start:]
+    highs = highs.loc[start:]
+    lows = lows.loc[start:]
+    closes = closes.loc[start:]
+
+    return positions, data_dict,opens, highs, lows, closes
+
+def get_settings_values(settings,tickers):
+    # mult dict to list in the tickers order - optimize by using list comprehension
+    mults_array = np.array([
+        settings['mults'][tick] if tick in settings['mults']
+        else (print(f"ADVERTENCIA: Falta {tick}, usando 1.0") or 1.0)
+        for tick in tickers
+    ])
+    startcash = settings['startcash']
+    exposition_lim = settings['exposition_lim']
+    commision = settings['commision']
+    max_n_contracts = settings['max_n_contracts']
+
+    return mults_array,startcash, exposition_lim, commision, max_n_contracts
+
 
 def compute_out_of_backtest_loop(closes, weights, mults):
     """Calculate asset prices and weights divided by asset prices."""
@@ -465,13 +477,17 @@ def compute_out_of_backtest_loop(closes, weights, mults):
 
 def compute_buy_sell_triggers(weights, closes,lows, highs):
     """Calculate buy/sell triggers and stop prices."""
-    # Weights Uptrend --> Yesterday low > previous 5 days lowest
-    weights_min = weights.shift(2).rolling(5).min()
-    weights_up = weights.shift(1).gt(weights_min, axis=0)
+    # Weights Uptrend --> weight > previous 5 days lowest
+    weights_min = weights.shift(1).rolling(5).min()
+    weights_up = weights.gt(weights_min, axis=0)
+
+    # Weights Downtrend --> weight < previous 5 days highest
+    weights_max = weights.shift(1).rolling(5).max()
+    weights_dn = weights.lt(weights_max, axis=0)
 
     # Lows Uptrend --> Yesterday low > previous 5 days lowest
     lows_min = lows.shift(1).rolling(5).min()
-    lows_up = lows.shift(1).ge(lows_min, axis=0)
+    lows_up = lows.ge(lows_min, axis=0)
 
     # Closes Uptrend
     if False:
@@ -483,34 +499,23 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
         closes_uptrend=  closes_up_fast & closes_up_slow #& closes_mean_crosed_up #
 
     # Highs Downtrend --> Yesterday high < previous 5 days highest
-    highs_max = highs.shift(2).rolling(5).max()
-    highs_dn = (highs.shift(1)).le(highs_max, axis=0)
+    highs_max = highs.shift(1).rolling(5).max()
+    highs_dn = highs.le(highs_max, axis=0)
 
     # Buy Trigger
     buy_trigger = lows_up & weights_up
 
     # Sell Trigger
-    sell_trigger = highs_dn  # Highs Downtrend
-
+    sell_trigger = highs_dn & weights_dn # Highs Downtrend
 
     # Get Sell Stop Price
     low_keep = lows_min.rolling(22).max()
     sell_stop_price = low_keep
-    #Fibonacci Stop Price
-    #fibonacci_38=lows_min + (highs_max - lows_min) * 0.38
-    #sell_stop_price = fibonacci_38
 
     # Get Buy Stop Price
-    fibo=False
-    if fibo:
-        # Fibonacci Stop Price
-        fibonacci_62 = lows_min + (highs_max - lows_min) * 0.62
-        buy_stop_price = fibonacci_62
-    else:
-        # Min of last month highs_min
-        high_keep = highs_max.rolling(22).min()
-        highs_std = highs.rolling(22).std().shift(1)
-        buy_stop_price = high_keep + highs_std * 0.5
+    high_keep = highs_max.rolling(22).min()
+    highs_std = highs.rolling(22).std().shift(1)
+    buy_stop_price = high_keep + highs_std * 0.5
 
     #Debug Plot
     debug=False
@@ -530,7 +535,6 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
         plot_df.tail(200).plot(title=ticker)
 
         print(plot_df[:-4].tail(5))
-
 
     return buy_trigger, sell_trigger, sell_stop_price, buy_stop_price
 
