@@ -228,7 +228,7 @@ def main(settings):
                         }
 
                         /* 6. Corregir el ancho de 960px que viene por defecto */
-                        [style*="width: 300px"], [style*="width:300px"] {
+                        [style*="width: 960px"], [style*="width:960px"] {
                             width: 100% !important;
                         }
                     </style>
@@ -239,6 +239,19 @@ def main(settings):
 
                 # 4. Display in Streamlit
                 components.html(responsive_html, height=1000, scrolling=True)
+
+                # We encode the HTML to base64 so the browser can treat it as a standalone file
+                import base64
+                final_html = html_content.replace("</head>", mobile_fix_css + "</head>")
+                b64 = base64.b64encode(final_html.encode()).decode()
+                href = f'<a href="data:text/html;base64,{b64}" target="_blank" style="text-decoration: none;">' \
+                       f'<button style="width: 100%; padding: 10px; background-color: #ff4b4b; color: white; ' \
+                       f'border: none; border-radius: 5px; cursor: pointer;">' \
+                       f'🚀 Open Full Report in New Window' \
+                       f'</button></a>'
+
+                st.markdown(href, unsafe_allow_html=True)
+
 
             except Exception as e:
                 # 4. 'pass' asegura que si algo falla, la aplicación NO se detenga ni se reinicie
