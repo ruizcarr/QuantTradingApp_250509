@@ -189,17 +189,44 @@ def main(settings):
                 with open(temp_path, "r", encoding="utf-8") as f:
                     html_content = f.read()
 
-                # 3. Inject CSS to force responsiveness
-                # This overrides the 960px fixed width and makes images/tables fit the screen
-                mobile_css = """
+                    # 4. CSS Correcto para evitar solapamiento y ajustar a móvil
+                    mobile_fix_css = """
                     <style>
-                        .container { max-width: 100% !important; margin: 0 !important; padding: 10px !important; }
-                        #left, #right { width: 100% !important; float: none !important; margin: 0 !important; }
-                        img, svg { max-width: 100% !important; height: auto !important; }
-                        table { width: 100% !important; font-size: 10px !important; } /* Smaller font for mobile tables */
+                        /* Ajuste de ancho total */
+                        body, .container { 
+                            max-width: 100% !important; 
+                            margin: 0 !important; 
+                            padding: 10px !important; 
+                        }
+
+                        /* SOLUCIÓN AL SOLAPAMIENTO: Forzar apilamiento vertical */
+                        .row, div, img, .table-container { 
+                            width: 100% !important; 
+                            display: block !important; 
+                            float: none !important; 
+                            position: relative !important;
+                            margin-bottom: 30px !important; /* Espacio real entre gráficos */
+                            clear: both !important;
+                        }
+
+                        /* Escalar imágenes de gráficos */
+                        img { 
+                            width: 100% !important; 
+                            height: auto !important; 
+                        }
+
+                        /* Tablas legibles en móvil */
+                        table { 
+                            font-size: 11px !important; 
+                            display: block !important;
+                            overflow-x: auto !important;
+                            white-space: nowrap !important;
+                        }
                     </style>
                     """
-                responsive_html = html_content.replace("</head>", mobile_css + "</head>")
+
+                    # 5. Inyectar el CSS en el HTML
+                    responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
 
                 # 4. Display in Streamlit
                 components.html(responsive_html, height=1000, scrolling=True)
