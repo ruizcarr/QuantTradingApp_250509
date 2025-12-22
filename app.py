@@ -160,6 +160,10 @@ def main(settings):
         #Display Current Portfolio Value
         display_portfolio_results(eod_log_history,settings,daysback=st.session_state.daysback)
 
+        # Show qstats annalitics HTML is a separate page
+        st.checkbox('Show Annalytics:', value=None, key='qstats')
+        st.write(settings['qstats'])
+
         #Input Display Options
         with st.expander('Display Options:'):
             cols = st.columns(4)
