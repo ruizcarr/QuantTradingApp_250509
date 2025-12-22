@@ -217,7 +217,7 @@ def main(settings):
                             margin: 0 !important;
                             padding: 0 !important;
                             width: 100% !important;
-                            font-size: 8px !important;
+                            font-size: 6px !important;
                         }
 
                         /* 5. Títulos pequeños y pegados al gráfico */
