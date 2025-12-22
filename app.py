@@ -175,24 +175,43 @@ def main(settings):
                 # 'pass' tells Python to do absolutely nothing and move to the next line
                 pass
 
+            import streamlit as st
+            import streamlit.components.v1 as components
+            import quantstats_lumi as qs
             import tempfile
             import os
 
-            # Create a valid string path in the system's temp folder
-            temp_path = os.path.join(tempfile.gettempdir(), "qs_report.html")
-
             try:
-                # Use the string path, NOT True
-                quantstats.reports.html(
+                # 1. Crear una ruta de archivo válida en la carpeta temporal del sistema
+                # Esto evita el ValueError y los problemas de permisos en Streamlit Cloud
+                temp_path = os.path.join(tempfile.gettempdir(), "qs_report.html")
+
+                # 2. Generar el informe. Pasamos el string de la ruta al parámetro 'output'
+                qs.reports.html(
                     q_returns,
                     title=q_title,
                     benchmark=q_benchmark,
                     benchmark_title=q_benchmark_ticker,
                     output=temp_path
                 )
-            except Exception:
-                # This ensures that even if it fails, your app keeps running
+
+                # 3. Leer el archivo generado y mostrarlo dentro de Streamlit
+                with open(temp_path, "r", encoding="utf-8") as f:
+                    html_content = f.read()
+                    components.html(html_content, height=1000, scrolling=True)
+
+            except Exception as e:
+                # 4. 'pass' asegura que si algo falla, la aplicación NO se detenga ni se reinicie
+                # Opcional: puedes poner st.warning(f"Error al generar reporte: {e}") si quieres saber qué pasó
                 pass
+
+            finally:
+                # 5. Limpieza: Intentar borrar el archivo temporal si existe
+                try:
+                    if 'temp_path' in locals() and os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except:
+                    pass
 
         #Input Display Options
         with st.expander('Display Options:'):
