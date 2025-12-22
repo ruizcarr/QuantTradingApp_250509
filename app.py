@@ -192,48 +192,49 @@ def main(settings):
                 # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
                 mobile_fix_css = """
                     <style>
-                        /* 1. Force everything to collapse unnecessary height */
-                        body, .container, .row, div { 
-                            max-width: 100% !important; 
-                            height: auto !important; /* Forces containers to shrink to their content */
+                        /* 1. Reset all containers to shrink-to-fit */
+                        .container, .row, div[style*="height"], div { 
+                            height: auto !important; 
                             min-height: 0 !important;
+                            max-width: 100% !important;
                             margin: 0 !important;
-                            padding: 2px !important;
+                            padding: 0 !important;
+                            position: relative !important; /* Disables any absolute positioning */
                         }
 
-                        /* 2. Fix the horizontal wrap without gaps */
+                        /* 2. Fix the Row layout to be tight */
                         .row { 
-                            display: flex !important; 
-                            flex-wrap: wrap !important;
-                            align-items: flex-start !important;
-                        }
-
-                        /* 3. Target #left and #right specifically to stack on mobile */
-                        #left, #right { 
-                            flex: 1 1 320px !important; 
+                            display: block !important; /* Stack elements naturally */
                             width: 100% !important;
-                            float: none !important;
-                            margin-bottom: 10px !important; /* Minimal gap between blocks */
+                            clear: both !important;
                         }
 
-                        /* 4. Fix Images (Charts) */
+                        /* 3. Force Charts to sit tight against each other */
                         img { 
                             width: 100% !important; 
-                            max-width: 100% !important;
                             height: auto !important; 
                             display: block !important;
-                            margin: 5px 0 !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
                         }
 
-                        /* 5. Kill empty spacers from the library */
-                        p, br { display: none !important; } 
-                        .table-container br, .table-container p { display: block !important; } /* Restore in tables only */
+                        /* 4. Fix side-by-side metrics (#left and #right) */
+                        #left, #right { 
+                            width: 100% !important;
+                            display: block !important;
+                            float: none !important;
+                            margin: 0 0 5px 0 !important; /* Only 5px gap between metric blocks */
+                        }
 
-                        /* 6. Table Font and Size */
+                        /* 5. Remove library spacers and titles padding */
+                        h4, h5 { margin: 10px 0 5px 0 !important; }
+                        p, br { content: "" !important; display: none !important; }
+
+                        /* 6. Clean up tables */
                         table { 
-                            font-size: 10px !important; 
-                            line-height: 1 !important;
-                            margin-bottom: 5px !important;
+                            margin: 0 !important;
+                            width: 100% !important;
+                            font-size: 10px !important;
                         }
                     </style>
                     """
