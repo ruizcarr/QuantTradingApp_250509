@@ -60,7 +60,7 @@ def compute(settings,data_ind):
     #Cash BackTest with Backtrader
     if settings['do_BT'] :
         if verbose: print('\nCash BackTest with Backtrader ')
-        _, log_history = compute_backtest_vectorized(positions, settings, data.data_dict)
+        bt_log_dict, log_history = compute_backtest_vectorized(positions, settings, data.data_dict)
 
         #Get End Of Day Values
         settings['tickers']=list(positions.columns)
@@ -152,7 +152,7 @@ def compute(settings,data_ind):
     if settings['verbose']:
         plt.show()
 
-    return log_history,positions
+    return log_history,positions,bt_log_dict
 
 def get_orders_log(log_history):
     def print_orders_log(df, title):
@@ -232,4 +232,4 @@ def get_trading_positions(data_ind, settings,indicators_dict):
 
 if __name__ == '__main__':
     data_ind = mdf.Data_Ind_Feed(settings).data_ind
-    log_history,positions=compute(settings,data_ind)
+    log_history,positions,bt_log_dict=compute(settings,data_ind)

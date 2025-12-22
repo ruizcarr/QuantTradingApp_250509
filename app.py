@@ -85,14 +85,14 @@ def main(settings):
             #st.write("data_bundle just after Yahoo Finance download last date", data.data_bundle_yf_raw.index[-1])
             #st.write("data_bundle last date", data.data_bundle.index[-1])
 
-            log_history, _ = compute(settings, data_ind)
+            log_history, _,bt_log_dict = compute(settings, data_ind)
 
-            return data, log_history
+            return data, log_history,bt_log_dict
 
         # ---------------- Main Execution ----------------
 
         # Now load (cached) data
-        data, log_history = load_and_compute_data(settings)
+        data, log_history,bt_log_dict = load_and_compute_data(settings)
 
         returns = data.tickers_returns
         closes = data.tickers_closes
@@ -163,6 +163,7 @@ def main(settings):
         # Show qstats annalitics HTML is a separate page
         st.checkbox('Show Annalytics:', value=None, key='qstats')
         st.write(settings['qstats'])
+        st.write(st.session_state.qstats)
 
         #Input Display Options
         with st.expander('Display Options:'):
