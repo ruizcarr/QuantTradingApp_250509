@@ -162,13 +162,15 @@ def main(settings):
 
         # Show qstats annalitics HTML is a separate page
         st.checkbox('Show Annalytics:', value=None, key='qstats')
-        st.write(settings['qstats'])
-        st.write(st.session_state.qstats)
         if st.session_state.qstats:
             from Backtest_Vectorized_Class import bt_qstats_report
             q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename=bt_qstats_report(bt_log_dict, closes, settings["add_days"], exchange_rate)
             import quantstats_lumi as quantstats
-            quantstats.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker)
+            try:
+                quantstats.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker)
+            except ValueError:
+                # 'pass' tells Python to do absolutely nothing and move to the next line
+                pass
 
         #Input Display Options
         with st.expander('Display Options:'):
