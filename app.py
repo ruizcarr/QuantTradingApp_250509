@@ -308,10 +308,6 @@ y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
     if st_altair_chart:
         st.altair_chart(alt_chart,use_container_width=True )
 
-    # Show qstats annalitics HTML is a separate page
-    st.checkbox('Show Annalytics:', value=None, key='qstats')
-    st.write(settings['qstats'])
-
     return alt_chart
 
 def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22, data_show='returns', chart=True):
