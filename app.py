@@ -235,7 +235,7 @@ def main(settings):
                     """
 
                 # 4. CSS for Zero Gaps + Perfect Mobile Width
-                mobile_fix_css = """
+                mobile_fix_css_good_ok_for_data = """
                     <style>
                         /* Force everything to full width and remove horizontal overflow */
                         html, body, .container, .row, div { 
@@ -283,6 +283,45 @@ def main(settings):
                         }
                     </style>
                     """
+                mobile_fix_css = """
+                   <style>
+                       /* 1. Global reset for vertical spacing */
+                       * { height: auto !important; min-height: 0 !important; }
+
+                       /* 2. Target specific first-page metrics containers */
+                       #left, #right { 
+                           width: 100% !important; 
+                           float: none !important; 
+                           margin: 0 !important; /* Removes the -1.2rem top margin from library */
+                           padding: 0 !important;
+                           display: block !important;
+                       }
+
+                       /* 3. Force the first page summary to be compact */
+                       .container { 
+                           width: 100% !important; 
+                           max-width: 100% !important; 
+                           padding: 5px !important; 
+                       }
+
+                       /* 4. Fix specific gaps in QuantStats tables and rows */
+                       table { margin-bottom: 10px !important; }
+                       hr { margin: 10px 0 !important; }
+                       br, p { display: none !important; }
+
+                       /* 5. Ensure charts on both pages don't have ghost spaces */
+                       img, .row { 
+                           display: block !important; 
+                           width: 100% !important; 
+                           margin-bottom: 5px !important; 
+                       }
+
+                       /* 6. Overwrite hardcoded width for perfect mobile fit */
+                       [style*="width: 960px"], [style*="width:960px"] {
+                           width: 100% !important;
+                       }
+                   </style>
+                   """
 
                 # 5. Inyectar el CSS en el HTML
                 responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
