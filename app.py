@@ -242,6 +242,7 @@ def main(settings):
 
                 # We encode the HTML to base64 so the browser can treat it as a standalone file
                 import base64
+                # 1. Preparar el HTML con tus correcciones móviles
                 mobile_fix_css = """
                 <style>
                     body, .container { width: 100% !important; max-width: 100vw !important; margin: 0 !important; padding: 5px !important; }
@@ -253,14 +254,37 @@ def main(settings):
                 </style>
                 """
                 final_html = html_content.replace("</head>", mobile_fix_css + "</head>")
-                b64 = base64.b64encode(final_html.encode()).decode()
-                href = f'<a href="data:text/html;base64,{b64}" target="_blank" style="text-decoration: none;">' \
-                       f'<button style="width: 100%; padding: 10px; background-color: #ff4b4b; color: white; ' \
-                       f'border: none; border-radius: 5px; cursor: pointer;">' \
-                       f'🚀 Open Full Report in New Window' \
-                       f'</button></a>'
 
-                st.markdown(href, unsafe_allow_html=True)
+                # 2. Codificar para pasar el contenido al script
+                b64_content = base64.b64encode(final_html.encode()).decode()
+
+                # 3. Script para abrir una ventana y escribir el contenido (Evita el bloqueo de data:uri)
+                # Usamos un botón de Streamlit que activa este JavaScript
+                st.components.v1.html(
+                    f"""
+                    <script>
+                    function openReport() {{
+                        var htmlContent = atob("{b64_content}");
+                        var blob = new Blob([htmlContent], {{type: 'text/html'}});
+                        var url = URL.createObjectURL(blob);
+                        window.open(url, '_blank');
+                    }}
+                    </script>
+                    <button onclick="openReport()" style="
+                        width: 100%; 
+                        padding: 12px; 
+                        background-color: #ff4b4b; 
+                        color: white; 
+                        border: none; 
+                        border-radius: 8px; 
+                        cursor: pointer; 
+                        font-weight: bold;
+                        font-size: 16px;">
+                        🚀 Abrir Reporte Completo (Nueva Ventana)
+                    </button>
+                    """,
+                    height=70,
+                )
 
 
             except Exception as e:
