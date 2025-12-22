@@ -284,44 +284,66 @@ def main(settings):
                     </style>
                     """
                 mobile_fix_css = """
-                   <style>
-                       /* 1. Global reset for vertical spacing */
-                       * { height: auto !important; min-height: 0 !important; }
+                    <style>
+                        /* 1. Reset de anchos para móvil */
+                        html, body, .container { 
+                            width: 100% !important; 
+                            max-width: 100vw !important; 
+                            margin: 0 !important; 
+                            padding: 2px !important;
+                            overflow-x: hidden !important;
+                        }
 
-                       /* 2. Target specific first-page metrics containers */
-                       #left, #right { 
-                           width: 100% !important; 
-                           float: none !important; 
-                           margin: 0 !important; /* Removes the -1.2rem top margin from library */
-                           padding: 0 !important;
-                           display: block !important;
-                       }
+                        /* 2. Eliminar huecos gigantes pero MANTENER visibilidad de líneas */
+                        div, .row { 
+                            height: auto !important; 
+                            min-height: 0 !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            display: block !important;
+                            position: relative !important;
+                        }
 
-                       /* 3. Force the first page summary to be compact */
-                       .container { 
-                           width: 100% !important; 
-                           max-width: 100% !important; 
-                           padding: 5px !important; 
-                       }
+                        /* 3. IMPORTANTE: NO aplicar display:block a los elementos internos de los gráficos */
+                        /* Esto asegura que las líneas (SVG paths) sean visibles */
+                        svg, svg * { 
+                            display: inline !important; 
+                            visibility: visible !important;
+                        }
 
-                       /* 4. Fix specific gaps in QuantStats tables and rows */
-                       table { margin-bottom: 10px !important; }
-                       hr { margin: 10px 0 !important; }
-                       br, p { display: none !important; }
+                        /* 4. Ajustar imágenes de gráficos */
+                        img { 
+                            width: 100% !important; 
+                            height: auto !important; 
+                            display: block !important;
+                            margin-bottom: 5px !important;
+                        }
 
-                       /* 5. Ensure charts on both pages don't have ghost spaces */
-                       img, .row { 
-                           display: block !important; 
-                           width: 100% !important; 
-                           margin-bottom: 5px !important; 
-                       }
+                        /* 5. Apilar métricas de la primera página (#left y #right) */
+                        #left, #right { 
+                            width: 100% !important; 
+                            float: none !important; 
+                            display: block !important;
+                            margin: 0 0 10px 0 !important;
+                        }
 
-                       /* 6. Overwrite hardcoded width for perfect mobile fit */
-                       [style*="width: 960px"], [style*="width:960px"] {
-                           width: 100% !important;
-                       }
-                   </style>
-                   """
+                        /* 6. Limpiar espacios vacíos manuales */
+                        br, p { display: none !important; }
+                        .table-container br { display: block !important; } /* Permitir en tablas */
+
+                        /* 7. Forzar tablas a ancho de página */
+                        table { 
+                            width: 100% !important; 
+                            font-size: 10px !important;
+                            margin-bottom: 5px !important;
+                        }
+
+                        /* Quitar el ancho fijo de 960px */
+                        [style*="width: 960px"], [style*="width:960px"] {
+                            width: 100% !important;
+                        }
+                    </style>
+                    """
 
                 # 5. Inyectar el CSS en el HTML
                 responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
