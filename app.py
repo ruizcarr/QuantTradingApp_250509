@@ -228,8 +228,8 @@ def main(settings):
                         }
 
                         /* 6. Corregir el ancho de 960px que viene por defecto */
-                        [style*="width: 960px"], [style*="width:960px"] {
-                            width: 150% !important;
+                        [style*="width: 600px"], [style*="width:600px"] {
+                            width: 100% !important;
                         }
                     </style>
                     """
