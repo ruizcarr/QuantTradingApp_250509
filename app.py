@@ -281,7 +281,7 @@ def main(settings):
                         cursor: pointer; 
                         font-weight: bold;
                         font-size: 16px;">
-                        🚀 Abrir Reporte Completo (Nueva Ventana)
+                        🚀 Open Report in a New Window
                     </button>
                     """,
                     height=70,
