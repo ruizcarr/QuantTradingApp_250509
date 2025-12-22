@@ -235,10 +235,10 @@ def main(settings):
                     """
 
                 # 5. Inyectar el CSS en el HTML
-                responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
+                #responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
 
                 # 4. Display in Streamlit
-                components.html(responsive_html, height=1000, scrolling=True)
+                #components.html(responsive_html, height=1000, scrolling=True)
 
                 # We encode the HTML to base64 so the browser can treat it as a standalone file
                 import base64
