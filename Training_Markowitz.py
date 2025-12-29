@@ -240,7 +240,10 @@ def apply_pos_constrain(positions,settings,tickers_returns ):
     #if settings['add_cash']:
     #    settings['pos_mult_factor'] = 2 * settings['pos_mult_factor'] * settings['tickers_bounds']['cash'][1] * 10
 
-    positions= get_volatility_limited_positions(positions, tickers_returns, settings['volatility_target'])
+    # First Apply upper limit to Volatility of returns (two times) to avoid volatility peacks
+    for i in range(2):
+        positions = get_volatility_limited_positions(positions, tickers_returns, settings['volatility_target'])
+
 
     #keep CL positions
     if 'CL=F' in positions.columns:
@@ -280,16 +283,13 @@ def apply_pos_constrain(positions,settings,tickers_returns ):
         positions['cash'] = positions['cash'].clip(upper=available_cash)
 
 
-
-
-
     return positions
 
 def get_volatility_limited_positions(positions, tickers_returns, volatility_target):
     tickers_returns=tickers_returns.reindex(positions.index)
     pos_returns = positions * tickers_returns
     pos_returns_volat = pos_returns.rolling(22).std() * 16
-    pos_volat_filter = (volatility_target / pos_returns_volat.shift(1)).clip(upper=1)
+    pos_volat_filter = (volatility_target / pos_returns_volat.shift(1)).clip(upper=1).fillna(1)
 
     #pos_returns_volat.plot(title='pos_returns_volat')
     #pos_volat_filter.plot(title='pos_volat_filter')
