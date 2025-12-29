@@ -19,8 +19,9 @@ settings={
     'add_cash':True,
 
     #Settings for Portfolio Optimization
+    #'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.3)}, #
     'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.3)}, #
-    'volatility_target': 0.110,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115
+    'volatility_target': 0.100,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115
 
     #Settings for Cash Back Test
     'do_BT': True,
@@ -37,7 +38,7 @@ settings={
     'w_upper_lim': 0.75,  #0.66, #1.0,  #0.9, #  Individual Upper Weight Limit
     'w_lower_lim': -0.1,  # Individual Lower Weight Limit
     'pos_exp_factor': 1.00, #1.05 # Position Exponential factor; positions = positions ** settings['pos_exp_factor']
-    'pos_mult_factor': 1.2, #1.5, #1.25, #1.15 # Position Multiplicative factor; positions = positions * settings['pos_mult_factor']
+    'pos_mult_factor': 1.5, #1.2, #1.5,#1.25, #1.15 # Position Multiplicative factor; positions = positions * settings['pos_mult_factor']
     'apply_pos_constraints': True,
 
     #Markowitz Windows Parameters [fast,mid,slow]

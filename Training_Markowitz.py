@@ -40,7 +40,7 @@ def run(settings):
 
     data_ind=mdf.Data_Ind_Feed(settings).data_ind
     data, indicators_dict = data_ind
-    #tickers_returns=data.tickers_returns
+    tickers_returns=data.tickers_returns
 
     end = time.time()
     times['get_data']= round(end - start,3)
@@ -95,7 +95,7 @@ def run(settings):
     #Apply Exposition Constraints
     #Exponential factor,Mult factor & Limit maximum/minimum individual position
     if settings['apply_pos_constraints']:
-        positions = apply_pos_constrain(positions,settings )
+        positions = apply_pos_constrain(positions,settings,tickers_returns )
 
         print("Pos Constraints Positions\n", positions.tail(10))
 
@@ -234,11 +234,13 @@ def get_vector_positions(tickers_returns, settings, data):
 
 
 
-def apply_pos_constrain(positions,settings ):
+def apply_pos_constrain(positions,settings,tickers_returns ):
 
     #Update pos_mult_factor when add_cash
     #if settings['add_cash']:
     #    settings['pos_mult_factor'] = 2 * settings['pos_mult_factor'] * settings['tickers_bounds']['cash'][1] * 10
+
+    positions= get_volatility_limited_positions(positions, tickers_returns, settings['volatility_target'])
 
     #keep CL positions
     if 'CL=F' in positions.columns:
@@ -279,7 +281,20 @@ def apply_pos_constrain(positions,settings ):
 
 
 
+
+
     return positions
+
+def get_volatility_limited_positions(positions, tickers_returns, volatility_target):
+    tickers_returns=tickers_returns.reindex(positions.index)
+    pos_returns = positions * tickers_returns
+    pos_returns_volat = pos_returns.rolling(22).std() * 16
+    pos_volat_filter = (volatility_target / pos_returns_volat.shift(1)).clip(upper=1)
+
+    #pos_returns_volat.plot(title='pos_returns_volat')
+    #pos_volat_filter.plot(title='pos_volat_filter')
+
+    return positions * pos_volat_filter
 
 
 if __name__ == '__main__':

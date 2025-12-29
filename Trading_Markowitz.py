@@ -38,8 +38,10 @@ def compute(settings,data_ind):
 
     # Get Data & Indicators
     data, indicators_dict = data_ind
+    tickers_returns = data.tickers_returns
+
     #data, indicators_dict =mdf.Data_Ind_Feed(settings).data_ind
-    #tickers_returns = data.tickers_returns
+
     #data_dict=data.data_dict
     #print("Closes with add", data.tickers_closes.tail(10))
     #print("Closes",data.tickers_closes.iloc[:-5].tail(5))
@@ -54,7 +56,7 @@ def compute(settings,data_ind):
 
 
 
-    positions = get_trading_positions(data_ind, settings,indicators_dict)
+    positions = get_trading_positions(data_ind, settings)
     #print("positions",positions.tail())
 
     #Cash BackTest with Backtrader
@@ -103,6 +105,8 @@ def compute(settings,data_ind):
             returns=nc * tickers_returns
             cum_ret_by_ticker=(1+returns).cumprod()
             tickers_cumret=(1+tickers_returns).cumprod()
+            #nc_returns_volat=returns.rolling(22).std()*16
+            #nc_returns_volat.plot(title='nc_returns_volat')
 
             tickers_returns_mean=tickers_returns.rolling(220).mean().shift(1)
              #system_perfomance = (returns - tickers_returns).shift(1).rolling(22).sum()
@@ -153,6 +157,7 @@ def compute(settings,data_ind):
         plt.show()
 
     return log_history,positions,bt_log_dict
+
 
 def get_orders_log(log_history):
     def print_orders_log(df, title):
@@ -209,7 +214,11 @@ def process_log_data_duplicated(log_history,settings):
 
     return eod_log_history,trading_history
 
-def get_trading_positions(data_ind, settings,indicators_dict):
+def get_trading_positions(data_ind, settings):
+
+    # Get Data & Indicators
+    data, indicators_dict = data_ind
+    tickers_returns = data.tickers_returns
 
     from WalkForwardTraining import WalkForwardTraining, get_params_from_csv
 
@@ -225,7 +234,7 @@ def get_trading_positions(data_ind, settings,indicators_dict):
     #Apply Exposition Constraints
     #Exponential factor,Mult factor & Limit maximum/minimum individual position
     if settings['apply_pos_constraints']:
-        positions = apply_pos_constrain(positions,settings )
+        positions = apply_pos_constrain(positions,settings,tickers_returns )
 
     return positions
 
