@@ -112,8 +112,6 @@ def compute(settings,data_ind):
             pos_returns_volat = pos_returns.rolling(22).std() * 16
             pos_returns_volat.plot(title='pos_returns_volat')
 
-
-
             tickers_returns_mean=tickers_returns.rolling(220).mean().shift(1)
              #system_perfomance = (returns - tickers_returns).shift(1).rolling(22).sum()
             #system_perfomance =100*tickers_returns_mean* (nc - 1)
