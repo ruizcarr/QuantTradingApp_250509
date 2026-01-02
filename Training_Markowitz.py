@@ -241,10 +241,9 @@ def apply_pos_constrain(positions,settings,tickers_returns ):
     #    settings['pos_mult_factor'] = 2 * settings['pos_mult_factor'] * settings['tickers_bounds']['cash'][1] * 10
 
     # First Apply upper limit to Volatility of returns (two times) to avoid volatility peacks
-    volatility_target=settings['volatility_target']-0.02
+    volatility_target=settings['volatility_target']-0.01
     for i in range(2):
-        positions = get_volatility_limited_positions(positions, tickers_returns, volatility_target)
-
+        positions = get_volatility_limited_positions(positions, tickers_returns, volatility_target,plot=False)
 
     #keep CL positions
     if 'CL=F' in positions.columns:
@@ -290,14 +289,24 @@ def apply_pos_constrain(positions,settings,tickers_returns ):
 def get_volatility_limited_positions(positions, tickers_returns, volatility_target,plot=False):
     tickers_returns=tickers_returns.reindex(positions.index)
     pos_returns = positions * tickers_returns
-    pos_returns_volat = pos_returns.rolling(22).std() * 16
+    pos_returns['sum']=pos_returns.sum(axis=1)
+    pos_returns_volat = pos_returns.rolling(22).std() * 16+0.0001
     pos_volat_filter = (volatility_target / pos_returns_volat.shift(1)).clip(upper=1).fillna(1)
+
+    #low_volat_treshold=.04
+    #pos_low_volat_filter = (pos_returns_volat.shift(1)/low_volat_treshold).clip(upper=1).fillna(1)
+
 
     if plot:
         pos_returns_volat.plot(title='pos_returns_volat')
         pos_volat_filter.plot(title='pos_volat_filter')
+        #pos_low_volat_filter.plot(title='pos_low_volat_filter')
 
-    return positions * pos_volat_filter
+    #Keep appart the sum
+    pos_volat_filter_sum = pos_volat_filter.pop('sum')
+    #pos_low_volat_filter_sum = pos_low_volat_filter.pop('sum')
+
+    return positions*pos_volat_filter.mul(pos_volat_filter_sum, axis=0) #.mul(pos_low_volat_filter_sum, axis=0) #*pos_volat_filter
 
 
 if __name__ == '__main__':
