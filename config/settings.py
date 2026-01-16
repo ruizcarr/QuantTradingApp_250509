@@ -30,7 +30,7 @@ settings={
     'EURUSD_hedge_factor': 0.0, #Percentage Hedge Exchange Rate Risk 0-1
     'btprint': False,
     'commision': 5, #USD by B/S contract
-    'max_n_contracts': 100,#maximum number of contract allowed to hold
+    'max_n_contracts': 100,#maximum number of micro contracts allowed to hold
 
     #Exposition Constraints
     'w_sum_max': 2.5,  # 2.5, Max sum of weights at markovitz calc
