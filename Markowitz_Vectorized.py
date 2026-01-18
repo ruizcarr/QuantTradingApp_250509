@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.mixture import GaussianMixture
 
 import time
 from datetime import date
@@ -425,6 +426,7 @@ def compute_markowitz_cov_metrics(returns,xs,cov_w,volat_target,strat_period):
     # Variances for all weights
     variances_xs = np.sum(np.multiply(np.dot(np_cov_matrices, xs.T), xs.T), axis=1)
 
+
     #Annualized Volatility for each Weights Combination xs
     volatility_xs = np.sqrt(variances_xs* 252*(week/5)) + 0.0001
 
@@ -509,9 +511,69 @@ def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
 
         dict['risk_xs'] = dict['volatility_xs'] * 0.5 + dict['ddn_xs_std']*1.5 + dict['volat_xs_std'] * 0.15
 
-        dict['opt_fun_xs'] = dict['risk_xs'] *risk_aversion - dict['cagr_xs'] + dict['penalties_xs']
+        dict['opt_fun_xs'] = dict['risk_xs'] - dict['cagr_xs'] + dict['penalties_xs']
 
     return dict
+
+
+def update_markowitz_cagr_metrics_regime(cagr_w, dict, strat_period='dayly'):
+    if strat_period == 'dayly':
+        year, week = 252, 5
+    elif strat_period == 'weekly':
+        year, week = 53, 1
+    elif strat_period == 'monthly':
+        year, week = 12, 1
+    else:
+        print('strat_period not defined')
+
+    # 1. NEW: Get the Regime Mask (1 for Panic, 0 for Calm)
+    regime_mask = get_regime_mask(dict['returns'])
+    regime_mask_2d = regime_mask.reshape(-1, 1)  # Reshape for broadcasting
+
+    # CAGR calculation
+    returns_xs_df = pd.DataFrame(dict['returns_xs'])
+    cagr_xs_df = returns_xs_df.rolling(cagr_w, min_periods=week).mean().fillna(0.0001) * year
+    dict['cagr_xs'] = np.array(cagr_xs_df)
+
+    use_normalized = True
+
+    if use_normalized:
+        # Normalize baseline values
+        for key in list(dict.keys()):
+            if '_xs' in key:  # Only clip the arrays, not metadata
+                dict[key + "_norm"] = np.clip(dict[key], 0.0001, 1)
+
+        dict['cagr_xs_norm'] = minmax_normalize(np.clip(dict['cagr_xs'], -1, 1))
+
+        # 2. NEW: Dynamic Risk Weights
+        # In Calm: Weights are [1.0, 1.0, 0.5]
+        # In Panic: Weights become [2.0, 2.5, 0.5] (Amplify Volatility and Drawdown)
+        volat_f = 1.0 + (regime_mask_2d * 1.5)
+        ddn_std_f = 1.0 + (regime_mask_2d * 1.5)
+        volat_std_f = 0.5 + (regime_mask_2d * 1.5)
+
+        # 3. Calculate Weighted Risk (Broadcasting the dynamic weights)
+        v_part = dict['volatility_xs_norm'] * volat_f
+        d_part = dict['ddn_xs_std_norm'] * ddn_std_f
+        s_part = dict['volat_xs_std_norm'] * volat_std_f
+
+        dict['risk_xs'] = (v_part + d_part + s_part) / (volat_f + ddn_std_f + volat_std_f)
+        dict['risk_xs_norm'] = dict['risk_xs']
+
+        # Final Opt Fun
+        dict['opt_fun_xs'] = dict['risk_xs_norm'] - dict['cagr_xs_norm'] + dict['penalties_xs_norm']
+
+    else:
+        # NEW: Dynamic Weights for non-normalized path as well
+        risk_aversion = 1.0 + (regime_mask_2d * 1.0)
+        dict['risk_xs'] = (dict['volatility_xs'] * 0.5 * risk_aversion) + \
+                          (dict['ddn_xs_std'] * 1.5 * risk_aversion) + \
+                          (dict['volat_xs_std'] * 0.15)
+
+        dict['opt_fun_xs'] = dict['risk_xs'] - dict['cagr_xs'] + dict['penalties_xs']
+
+    return dict
+
 
 def softmax(x):
     """Applies softmax normalization to a NumPy array row-wise.
@@ -532,6 +594,22 @@ def minmax_normalize(x):
     x=(x-min)/(max-min)
     #x=np.clip(x, 0, 1)
     return x
+
+
+def cum_minmax_normalize(x):
+    """
+    Vectorized expanding min-max normalization for NumPy arrays.
+    x shape: (n_days, n_combinations)
+    """
+    # Calculate running extremes along the time axis (axis 0)
+    running_min = np.minimum.accumulate(x, axis=0)
+    running_max = np.maximum.accumulate(x, axis=0)
+
+    # Calculate range, preventing division by zero
+    rng = running_max - running_min
+    rng[rng == 0] = 1e-9
+
+    return (x - running_min) / rng
 
 def mean_std_normalize(x,n=2):
     std=np.nanstd(x)
@@ -578,7 +656,7 @@ def compute_mkwtz_vectorized_local(markowitz_data_dict, metrics=True):
 
     # Localize index of xs where opt_fun is minimum
     opt_fun_min_idx_xs = np.argmin(opt_fun_xs, axis=1)
-    
+
     # Get weights of this minimum
     weights = xs[opt_fun_min_idx_xs]
 
@@ -1268,6 +1346,23 @@ def get_opt_fun_predition_accuracy(opt_fun_xs):
     accuracy_expected_array=np.array(accuracy_expected)
 
     return accuracy_expected_array
+
+
+
+def get_regime_mask(returns, window=20):
+    """
+    Returns 1.0 for High Volatility (Panic) and 0.0 for Low Volatility (Calm).
+    """
+    # Use first ticker volatility as the regime signal
+    vol_feature = returns.iloc[:, 0].rolling(window).std() * np.sqrt(252)
+    vol_feature = vol_feature.fillna(method='bfill').values.reshape(-1, 1)
+
+    # Fit GMM and identify High Vol state
+    gmm = GaussianMixture(n_components=2, random_state=42).fit(vol_feature)
+    states = gmm.predict(vol_feature)
+    high_vol_idx = np.argmax(gmm.means_.flatten())
+
+    return (states == high_vol_idx).astype(float)
 
 
 if __name__ == "__main__":

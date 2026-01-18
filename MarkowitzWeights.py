@@ -10,6 +10,13 @@ class MarkowitzWeights:
     _counter = 0  # Replaces randomness with a deterministic counter
     _last_weights = None
 
+    @classmethod
+    def reset_state(cls):
+        """Resets the global state for a fresh backtest run."""
+        cls._gmm_model = None
+        cls._counter = 0
+        cls._last_weights = None
+
     def __init__(self, tickers_returns, volatility_target, settings, x0):
         self.tickers_returns = tickers_returns
         self.settings = settings
@@ -46,7 +53,7 @@ class MarkowitzWeights:
     def _get_regime_deterministic(self, returns, retrain_step=12):
         """Identifies regime using a GMM that updates on a fixed schedule."""
         try:
-            # Feature: NQ 20-day rolling annualized volatility
+            # Feature: 20-day rolling annualized volatility
             recent_vol = returns.iloc[-20:, 0].std() * np.sqrt(252)
 
             # DETERMINISTIC UPDATE: No randomness.
@@ -91,7 +98,7 @@ class MarkowitzWeights:
             constraints=cons,
             bounds=bnds,
             tol=1e-8,
-            options={'ftol': 1e-8, 'maxiter': 500}
+            options={'ftol': 1e-8, 'maxiter': 150}
         )
         return res
 
@@ -101,6 +108,5 @@ def mkwtz_opt_fun(x, CAGR, cov):
     # This is the most stable formulation for 5 assets
     port_var = np.dot(x.T, np.dot(cov, x))
     port_ret = np.dot(CAGR, x)
-    risk_aversion = 3.0
-    utility = port_ret - 0.5 * risk_aversion * port_var
+    utility = port_ret - 0.5  * port_var
     return -utility

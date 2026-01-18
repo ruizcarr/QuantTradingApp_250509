@@ -215,6 +215,8 @@ class RollingMarkowitzWeights:
 
         #Get data Features for this lookback: rolling_cagr, rolling_cov_matrices
 
+        # IMPORTANT: Clear the 'Memory' of the class for a clean run
+        MarkowitzWeights.reset_state()
 
         #weights_prev = np.zeros(self.size)
         #x0 = np.ones([self.size, 1]) / self.size * 0.1
@@ -230,19 +232,6 @@ class RollingMarkowitzWeights:
                 results_by_period_df.loc[index,['opt_fun'] + self.tickers.tolist() ] = [mw.results.fun] + list(mw.results.x)
 
             return results_by_period_df
-
-        def get_results_vectorized(results_by_period_df, x0):
-
-            def calculate_weights_for_slice(slice_df):
-                mw = MarkowitzWeights(slice_df, self.volatility_target, self.settings, x0)
-                return pd.Series([mw.results.fun] + list(mw.results.x), index=['opt_fun'] + self.tickers.tolist())
-
-            # Apply the function to each slice and assign the results to the DataFrame
-            results_by_period_df.loc[:, ['opt_fun'] + self.tickers.tolist()] = results_by_period_df.apply(
-                lambda row: calculate_weights_for_slice(self.tickers_returns.loc[row['start']:row['end']]), axis=1)
-
-            return results_by_period_df
-
 
         #results_by_period_df = get_results_vectorized(results_by_period_df, x0)
         results_by_period_df = get_results_by_loop(results_by_period_df, x0)

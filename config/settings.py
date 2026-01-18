@@ -11,7 +11,7 @@ from datetime import timedelta
 settings={
 
     #Settings for Data Feed
-    'tickers': [ 'ES=F','NQ=F', 'GC=F','CL=F', 'EURUSD=X'],#,'BTC-USD'
+    'tickers': [ 'ES=F','NQ=F', 'GC=F','CL=F', 'EURUSD=X','BTC-USD'],#
     'start': '1996-01-01',#TRADING#'2019-01-01' #TRAINING#'1996-01-01'
     'end':  (date.today() + timedelta(days=1)).isoformat(),  #'2023-04-01',# '2023-01-18',# '2004-01-18',#
     'add_days': 5,  # Additional Business days for next days position estimation
