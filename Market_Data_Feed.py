@@ -1007,7 +1007,7 @@ class Indicators:
         if 'cash' in self.comb_weights.columns:
             self.comb_weights['cash'] = self.Euribor_ind['cash']
 
-        tickers_exceptions=['EURUSD=X','BTC-USD'] #
+        tickers_exceptions=['EURUSD=X'] #,'BTC-USD'
         for ticker in tickers_exceptions:
             if ticker in self.comb_weights.columns:
                 self.comb_weights[ticker] = 1
