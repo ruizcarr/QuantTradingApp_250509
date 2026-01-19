@@ -55,7 +55,8 @@ class Strategy:
             self.weights_df= mean_positions(self.s_weights_df,self.v_weights_df,settings['w_upper_lim'],
                                          sf = 1.0 ,vf = 1.0 ,overall_f = 1.0)
 
-
+        #self.s_weights_df.plot(title='s_weights_df')
+        #self.v_weights_df.plot(title='v_weights_df')
 
         if settings['apply_strategy_weights']:
             # Apply RSI and other additional Strategy Weights on top of Markowitz weights
@@ -67,6 +68,11 @@ class Strategy:
         # Limit Upper individual position
         positions = positions.clip(upper=settings['w_upper_lim'])
 
+         #Make Zero individual positions bellow 'w_min_lim'
+        # We keep the value if |x| >= threshold, otherwise set to 0
+        positions = positions.where(positions.abs() >= settings['w_min_lim'], 0)
+
+        #positions.plot(title='positions_filtered')
 
         self.positions = positions.copy()
 

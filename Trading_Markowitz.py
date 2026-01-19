@@ -235,6 +235,8 @@ def get_trading_positions(data_ind, settings):
     wft.Test(indicators_dict,params_train,do_annalytics=False)
     positions=wft.test_positions
 
+    #positions.plot(tittle='test_positions')
+
     #Apply Exposition Constraints
     #Exponential factor,Mult factor & Limit maximum/minimum individual position
     if settings['apply_pos_constraints']:

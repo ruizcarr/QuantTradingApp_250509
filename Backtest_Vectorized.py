@@ -177,6 +177,12 @@ def   compute_backtest(weights_div_asset_price,asset_price,opens,highs,lows,clos
     if "CL=F" in target_size_raw.columns:
         mask["CL=F"] = False
 
+    if "BTC-USD" in target_size_raw.columns:
+        mask["BTC-USD"] = False
+
+    if "EURUSD=X" in target_size_raw.columns:
+        mask["EURUSD=X"] = False
+
     # Apply upgrade
     target_size_raw[mask] = target_size_raw[mask].clip(lower=1)
 
