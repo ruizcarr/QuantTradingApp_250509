@@ -192,6 +192,14 @@ class Data:
         # -----------------------------
         self.final_sanity_check(verbose=False)
 
+
+        self.compressed_rets = get_pure_event_returns(self.tickers_returns, sigma_multiplier=4.0)
+
+        # Re-expand to Original Daily Index ---
+        # This matches the weights back to your original daily timeline
+        #weights = compressed_weights.reindex(tickers_returns.index).ffill().fillna(0)
+
+
     def yf_data_bundle_tz_isue(self, tickers, start, end,add_days=0):
         """"Get Closes & Returns from yahoo finance
                 Save OHLC to tickers dict"""
@@ -2064,6 +2072,314 @@ def download_data_ticker_by_ticker(tickers_list, start_date, end_date, delay_sec
 
     return consolidated_data, status_message
 
+#Compressed Data
+def get_pure_event_returns_bench(tickers_returns, anchor_col='ES=F', threshold=0.015):
+        """
+        PRE-PROCESSOR:
+        Converts daily returns into a compressed 'Information-Event' DataFrame.
+        """
+        # 1. Identify Information Events using the Compounding Anchor (ES=F)
+        # Using log-space ensures 1% is always 1% regardless of price level
+        anchor_price_path = (1 + tickers_returns[anchor_col]).cumprod()
+        log_price = np.log(anchor_price_path)
+        log_threshold = np.log(1 + threshold)
+
+        # Identify where the price crosses a new 'Information Brick'
+        event_indices = (log_price / log_threshold).apply(np.floor)
+        event_mask = event_indices.diff() != 0
+        event_mask.iloc[0] = True
+
+        # 2. Accumulate and Compound
+        # Group by the event ID to preserve all returns between events
+        event_groups = event_mask.cumsum()
+        compressed_df = tickers_returns.groupby(event_groups).apply(
+            lambda x: (1 + x).prod() - 1
+        )
+
+        # 3. Set the index to the date the event actually finished
+        compressed_df.index = tickers_returns.index[event_mask]
+
+        return compressed_df
+
+def get_pure_event_returns_any(tickers_returns, threshold=0.015):
+    """
+    PRE-PROCESSOR:
+    Convierte retornos diarios en un DataFrame de 'Eventos de Información'.
+    Se dispara cuando CUALQUIER activo supera el umbral de movimiento logarítmico.
+    """
+    # 1. Calcular trayectorias de precios logarítmicos para todos los tickers
+    # (1 + r).cumprod() -> Precio acumulado
+    # np.log(...) -> Espacio logarítmico para mantener simetría en el umbral
+    price_paths = (1 + tickers_returns).cumprod()
+    log_prices = np.log(price_paths)
+    log_threshold = np.log(1 + threshold)
+
+    # 2. Identificar cruces de 'Bricks' para cada ticker individualmente
+    # Calculamos en cuántos "escalones" de umbral está cada precio
+    event_indices_all = (log_prices / log_threshold).apply(np.floor)
+
+    # Detectamos cambios en los escalones (diff != 0)
+    # .any(axis=1) hace que si CUALQUIERA cambia, se marque como True
+    event_mask = (event_indices_all.diff() != 0).any(axis=1)
+
+    # Forzamos que el primer día siempre sea un evento para inicializar
+    event_mask.iloc[0] = True
+
+    # 3. Agrupación y Compounding
+    # Creamos grupos: cada vez que event_mask es True, el ID de grupo aumenta
+    event_groups = event_mask.cumsum()
+
+    # Agrupamos los retornos originales y los multiplicamos (compound)
+    compressed_df = tickers_returns.groupby(event_groups).apply(
+        lambda x: (1 + x).prod() - 1
+    )
+
+    # 4. Alinear el índice con la fecha exacta en que se completó el evento
+    compressed_df.index = tickers_returns.index[event_mask]
+
+    return compressed_df
 
 
+def get_pure_event_returns_nok(tickers_returns, sigma_multiplier=2.5, lookback_days=30):
+    # 1. Limpieza y Volatilidad (Datos pasados únicamente)
+    clean_returns = tickers_returns.clip(lower=-0.5, upper=0.5)
+    relevant_tickers = [c for c in clean_returns.columns if 'cash' not in c.lower()]
+    hist_std = clean_returns[relevant_tickers].iloc[:-lookback_days].std().replace(0, 0.01)
 
+    # 2. Trigger de Eventos
+    z_scores = clean_returns[relevant_tickers] / hist_std
+    event_mask = z_scores.abs().max(axis=1) > sigma_multiplier
+    event_mask.iloc[0] = True
+
+    # 3. Agrupación
+    groups = event_mask.cumsum()
+
+    # 4. Cálculo del Retorno del Bloque
+    comp_vals = clean_returns.groupby(groups).apply(lambda x: (1 + x).prod() - 1)
+
+    # --- EL CAMBIO DEFINITIVO PARA ESTAR SEGUROS ---
+    # Asignamos el retorno del evento al día SIGUIENTE de que se disparó el trigger.
+    # Esto asegura que no hay forma física de que el bot "sepa" el precio de cierre
+    # en el momento del trade.
+    trigger_dates = tickers_returns.index[event_mask]
+
+    # Desplazamos las fechas un paso hacia adelante en el calendario original
+    # o simplemente nos aseguramos de que el índice sea el del trigger.
+    comp_vals.index = trigger_dates[:len(comp_vals)]
+
+    return comp_vals
+
+
+def get_pure_event_returns_loop(tickers_returns, sigma_multiplier=2.5, lookback_days=30):
+    # 1. Preparación de umbrales por activo
+    relevant_tickers = [c for c in tickers_returns.columns if 'cash' not in c.lower()]
+    clean_rets = tickers_returns.clip(lower=-0.5, upper=0.5)
+
+    # Calculamos la volatilidad histórica (std)
+    stds = clean_rets[relevant_tickers].iloc[:-lookback_days].std()
+    thresholds = (stds * sigma_multiplier).to_dict()
+
+    # 2. Inicialización de la Máquina de Estados
+    # 'anchors' guarda el precio acumulado de la última vez que disparamos un evento
+    last_anchors = {t: 1.0 for t in relevant_tickers}
+    current_cum_prices = {t: 1.0 for t in relevant_tickers}
+
+    # Lista para guardar los retornos comprimidos
+    compressed_data = []
+
+    # 3. Bucle Causal (Procesamiento secuencial)
+    for date, row in clean_rets.iterrows():
+        event_triggered = False
+
+        # Actualizamos precios acumulados actuales
+        for t in relevant_tickers:
+            current_cum_prices[t] *= (1 + row[t])
+
+            # Calculamos la variación respecto al ANCLA (el último evento)
+            change = abs(current_cum_prices[t] - last_anchors[t]) / last_anchors[t]
+
+            if change >= thresholds[t]:
+                event_triggered = True
+
+        # Si alguien rompió el umbral, cerramos el evento
+        if event_triggered:
+            # El retorno del evento es el cambio desde el último ancla hasta hoy
+            event_row = {}
+            for t in tickers_returns.columns:
+                # Retorno acumulado desde el último ancla
+                # Para activos relevantes, calculamos el salto
+                if t in relevant_tickers:
+                    event_row[t] = (current_cum_prices[t] / last_anchors[t]) - 1
+                    # ACTUALIZAMOS EL ANCLA: Hoy es la nueva referencia
+                    last_anchors[t] = current_cum_prices[t]
+                else:
+                    # Para el cash, simplemente acumulamos lo que haya pasado
+                    event_row[t] = row[t]  # Simplificación o lógica similar de ancla
+
+            event_row['date'] = date
+            compressed_data.append(event_row)
+
+    # 4. Construcción del DataFrame final
+    if not compressed_data:
+        return pd.DataFrame()
+
+    df_events = pd.DataFrame(compressed_data).set_index('date')
+    return df_events
+
+
+def get_pure_event_returns_ok(tickers_returns, sigma_multiplier=2.5, lookback_days=30):
+    # 1. Preparación de datos (Igual que antes)
+    clean_rets = tickers_returns.clip(lower=-0.5, upper=0.5)
+    relevant_cols = [c for c in clean_rets.columns if 'cash' not in c.lower()]
+
+    # Indices y arrays
+    rel_indices = [clean_rets.columns.get_loc(c) for c in relevant_cols]
+    data_values = clean_rets.values
+    dates = clean_rets.index
+
+    # Umbrales
+    stds = clean_rets.iloc[:-lookback_days, rel_indices].std().values
+    stds = np.where(stds == 0, 0.01, stds)
+    thresholds = stds * sigma_multiplier
+
+    # 2. Pre-cálculo Global (La clave del salto)
+    # Convertimos retornos a curva de precios global (Base 1.0)
+    # Usamos log-retornos para facilitar la resta en lugar de división en el bucle
+    log_data = np.log1p(data_values)
+    global_cum_log = np.cumsum(log_data, axis=0)  # [Days, Assets]
+
+    # Variables de estado
+    n_rows = len(dates)
+    current_idx = 0
+    event_returns = []
+    event_dates_idx = []  # Guardamos índices numéricos para velocidad
+
+    # Convertimos thresholds a log para comparar sumas
+    log_thresholds = np.log1p(thresholds)
+
+    # 3. Bucle de Saltos (Itera solo por EVENTOS, no por días)
+    while current_idx < n_rows - 1:
+        # a. Definimos el "Piso" actual (Ancla)
+        # Tomamos los valores log acumulados hasta el momento del último evento
+        current_anchor = global_cum_log[current_idx, rel_indices]
+
+        # b. Miramos al futuro: Restamos el ancla a todo lo que queda
+        # Esto nos da el retorno acumulado relativo desde AHORA hasta el final
+        future_curve = global_cum_log[current_idx + 1:, rel_indices] - current_anchor
+
+        # c. Detección Vectorizada del próximo disparo
+        # Matriz Booleana: ¿Dónde se rompe el umbral en el futuro?
+        breach_mask = np.abs(future_curve) >= log_thresholds
+
+        # Colapsamos a 1D: ¿Algún activo rompió el umbral en cada día futuro?
+        # any(axis=1) nos dice True si al menos un activo disparó ese día
+        days_triggers = breach_mask.any(axis=1)
+
+        # d. Encontrar el PRIMER True (argmax devuelve el índice del primer True)
+        if not days_triggers.any():
+            break  # No hay más eventos hasta el final de la serie
+
+        next_jump = np.argmax(days_triggers)
+        # next_jump es relativo al slice (0 es el día siguiente a current_idx)
+
+        # e. Calcular coordenadas reales del evento
+        real_event_idx = current_idx + 1 + next_jump
+
+        # f. Guardar resultado
+        # Calculamos el retorno exacto usando la diferencia de logs convertida a pct
+        # Tomamos el slice global completo para reportar todos los activos (incluido cash)
+        # Retorno = exp(Log_Final - Log_Inicial) - 1
+        pct_change = np.expm1(global_cum_log[real_event_idx] - global_cum_log[current_idx])
+
+        event_returns.append(pct_change)
+        event_dates_idx.append(real_event_idx)
+
+        # g. SALTO TEMPORAL
+        # Avanzamos el puntero directamente al día del evento
+        current_idx = real_event_idx
+
+    # 4. Reconstrucción
+    if not event_returns:
+        return pd.DataFrame()
+
+    df_events = pd.DataFrame(event_returns, index=dates[event_dates_idx], columns=clean_rets.columns)
+    return df_events
+
+
+def get_pure_event_returns(tickers_returns, sigma_multiplier=2.5, rolling_years=4):
+    """
+    Algoritmo de Salto Vectorizado con Umbrales Dinámicos (Rolling Std).
+    """
+    # 1. Limpieza y Preparación
+    clean_rets = tickers_returns.clip(lower=-0.5, upper=0.5)
+    relevant_cols = [c for c in clean_rets.columns if 'cash' not in c.lower()]
+
+    # Indices para NumPy
+    rel_indices = [clean_rets.columns.get_loc(c) for c in relevant_cols]
+    data_values = clean_rets.values
+    dates = clean_rets.index
+
+    # --- 2. CÁLCULO DE UMBRALES DINÁMICOS (Rolling) ---
+    # Convertimos años a días de trading (aprox 252 por año)
+    window_size = int(252 * rolling_years)
+
+    # Pre-calculamos la std móvil para todo el histórico de una vez (Vectorizado por Pandas)
+    # min_periods=30 asegura que empiece a funcionar al mes, expandiéndose hasta llegar a 4 años
+    rolling_std = clean_rets.iloc[:, rel_indices].rolling(window=window_size, min_periods=30).std()
+
+    # Rellenamos los primeros 30 días con la primera volatilidad disponible para no tener NaNs
+    rolling_std = rolling_std.bfill().fillna(0.01)
+
+    # Matriz de Umbrales Logarítmicos [N_Rows, N_Assets]
+    # Cada día tiene su propio umbral basado en los 4 años anteriores
+    dynamic_thresholds = (rolling_std * sigma_multiplier).values
+    log_dynamic_thresholds = np.log1p(dynamic_thresholds)
+
+    # 3. Pre-cálculo Global de Precios (Log-Space)
+    log_data = np.log1p(data_values)
+    global_cum_log = np.cumsum(log_data, axis=0)
+
+    # Variables de estado
+    n_rows = len(dates)
+    current_idx = 0
+    event_returns = []
+    event_dates_idx = []
+
+    # 4. Bucle de Saltos con Umbral Adaptativo
+    while current_idx < n_rows - 1:
+        # a. Ancla actual
+        current_anchor = global_cum_log[current_idx, rel_indices]
+
+        # b. Curva futura relativa
+        future_curve = global_cum_log[current_idx + 1:, rel_indices] - current_anchor
+
+        # c. UMBRAL ADAPTATIVO
+        # Usamos el umbral calculado en la fecha del 'current_idx' (conocido al momento de la decisión)
+        # Broadcasting: future_curve (N, Assets) vs current_thresh (Assets)
+        current_thresh_vector = log_dynamic_thresholds[current_idx]
+
+        # d. Detección Vectorizada
+        breach_mask = np.abs(future_curve) >= current_thresh_vector
+        days_triggers = breach_mask.any(axis=1)
+
+        if not days_triggers.any():
+            break
+
+        # e. Salto al siguiente evento
+        next_jump = np.argmax(days_triggers)
+        real_event_idx = current_idx + 1 + next_jump
+
+        # f. Calcular y Guardar
+        pct_change = np.expm1(global_cum_log[real_event_idx] - global_cum_log[current_idx])
+        event_returns.append(pct_change)
+        event_dates_idx.append(real_event_idx)
+
+        # g. Actualizar puntero
+        current_idx = real_event_idx
+
+    # 5. Resultado
+    if not event_returns:
+        return pd.DataFrame()
+
+    df_events = pd.DataFrame(event_returns, index=dates[event_dates_idx], columns=clean_rets.columns)
+    return df_events

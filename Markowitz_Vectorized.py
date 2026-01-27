@@ -516,6 +516,7 @@ def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
     return dict
 
 
+
 def update_markowitz_cagr_metrics_regime(cagr_w, dict, strat_period='dayly'):
     if strat_period == 'dayly':
         year, week = 252, 5

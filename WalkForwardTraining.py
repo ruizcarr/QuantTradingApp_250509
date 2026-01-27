@@ -139,7 +139,7 @@ class WalkForwardTraining:
 
         #Get Data & Indicators
         data, indicators_dict = data_ind
-        tickers_returns=data.tickers_returns
+        tickers_returns=self.tickers_returns
 
         # Create results dataframe for params values after Training for each window
         params_train = self.tt_windows[['startoftrain', 'endoftrain']]
@@ -244,7 +244,7 @@ class WalkForwardTraining:
             slice_settings = {**slice_settings, **params_train.loc[row.name, opt_keys].to_dict()}
 
             #Get Slice tickers
-            slice_tickers_returns = data.tickers_returns.loc[row['startoftrain']:row['endoftrain']]
+            slice_tickers_returns = self.tickers_returns.loc[row['startoftrain']:row['endoftrain']]
 
             # Get Returns of Slice
             st_train =  Strategy(slice_settings, slice_tickers_returns, indicators_dict)
@@ -270,7 +270,7 @@ class WalkForwardTraining:
             slice_settings = {**slice_settings, **params_train.loc[row.name, opt_keys].to_dict()}
 
             # Get slice tickers and returns
-            slice_tickers_returns = data.tickers_returns.loc[row['startoftrain']:row['endoftrain']]
+            slice_tickers_returns = self.tickers_returns.loc[row['startoftrain']:row['endoftrain']]
 
             # Create and run strategy
             st_train = Strategy(slice_settings, slice_tickers_returns, indicators_dict)

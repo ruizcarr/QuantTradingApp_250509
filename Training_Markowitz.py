@@ -100,7 +100,7 @@ def run(settings):
         #print("Pos Constraints Positions\n", positions.tail(10))
 
     end = time.time()
-    times['test'] =  round(end - start,3)
+    times['test'] = round(end - start, 3)
 
     if settings['verbose']:
         print('Test Ok',times['training'])

@@ -39,6 +39,9 @@ class MarkowitzWeights:
         prior = np.eye(self.size) * np.mean(np.diag(sample_cov))
         self.covariance_matrix = (1 - shrinkage) * sample_cov + shrinkage * prior
 
+
+
+
         # 4. Optimization
         # We ALWAYS use the same starting point logic for 100% consistency
         # Warm start is used for speed, but 'x0' is used if it's the first run
@@ -72,7 +75,7 @@ class MarkowitzWeights:
         except:
             return 0
 
-    def compute_portfolio(self, x0, tickers_bounds, volatility_target=None):
+    def compute_portfolio_OK(self, x0, tickers_bounds, volatility_target=None):
         w_sum_max = self.settings.get('w_sum_max', 1.0)
 
         # Fixed Constraints for SLSQP
@@ -102,6 +105,56 @@ class MarkowitzWeights:
         )
         return res
 
+    def compute_portfolio(self, x0, tickers_bounds, volatility_target=None):
+        w_sum_max = self.settings.get('w_sum_max', 1.0)
+
+        # --- VECTORIZED BOUNDS LOGIC ---
+        # Convert dict-based bounds to arrays
+        bounds_mat = np.array([tickers_bounds[t] for t in self.tickers])
+        lowers = bounds_mat[:, 0]
+        uppers = bounds_mat[:, 1]
+
+        # MASK: Force upper bound to 0 where CAGR is not positive
+        # This is the "Positive CAGR only" filter
+        mask = self.CAGR > 0.001
+        uppers = np.where(mask, uppers, 0.0)
+
+        # Reformat for SLSQP (list of tuples)
+        adj_bounds = list(zip(lowers, uppers))
+
+        # Vectorize x0 alignment: Zero out weights for negative CAGR assets
+        adj_x0 = np.where(mask, x0, 0.0)
+
+        # Safety: If all assets are masked out, adj_x0 stays 0 (Cash position)
+        # If some are positive, ensure we have a valid starting sum
+        total_start_w = np.sum(adj_x0)
+        if total_start_w == 0 and np.any(mask):
+            adj_x0 = mask.astype(float) / np.sum(mask)
+
+        # --- OPTIMIZATION ---
+        cons = [
+            {"type": "ineq", "fun": lambda x: w_sum_max - np.sum(np.abs(x))},
+            {"type": "ineq", "fun": lambda x: np.sum(x)},
+        ]
+
+        if volatility_target:
+            # max(..., 0) inside sqrt prevents floating point errors on negative variance
+            cons.append({
+                "type": "ineq",
+                "fun": lambda x: volatility_target - np.sqrt(max(np.dot(x.T, np.dot(self.covariance_matrix, x)), 0))
+            })
+
+        res = minimize(
+            mkwtz_opt_fun,
+            adj_x0,
+            args=(self.CAGR, self.covariance_matrix),
+            method='SLSQP',
+            constraints=cons,
+            bounds=adj_bounds,
+            tol=1e-8,
+            options={'ftol': 1e-8, 'maxiter': 150}
+        )
+        return res
 
 def mkwtz_opt_fun(x, CAGR, cov):
     # Quadratic Utility: Maximize (Return - 0.5 * Risk_Aversion * Variance)
@@ -109,4 +162,5 @@ def mkwtz_opt_fun(x, CAGR, cov):
     port_var = np.dot(x.T, np.dot(cov, x))
     port_ret = np.dot(CAGR, x)
     utility = port_ret - 0.5  * port_var
+
     return -utility
