@@ -47,7 +47,6 @@ class BacktestVectorized:
             pos: pd.DataFrame,
             max_iterations: int = 200,
             max_n_contracts: int = 50,
-            swan_stop_price: pd.DataFrame = None,  # Added this argument
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
 
 
@@ -85,7 +84,7 @@ class BacktestVectorized:
             new_pos, new_portfolio, bt_log_dict = self.compute_backtest(
                 weights_div_asset_price, asset_price, opens, highs, lows, closes, mults,
                 current_portfolio, weights, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
-                exchange_rate, startcash_usd, startcash, exposition_lim, current_pos,max_n_contracts, swan_stop_price
+                exchange_rate, startcash_usd, startcash, exposition_lim, current_pos,max_n_contracts
             )
 
             # Store results for this iteration
@@ -135,7 +134,6 @@ class BacktestVectorized:
             exposition_lim: float,
             pos: pd.DataFrame,
             max_n_contracts: int ,
-            swan_stop_price: pd.DataFrame,
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
         """Execute backtest computation."""
         bt_log_dict = {}
@@ -161,10 +159,6 @@ class BacktestVectorized:
         target_size = target_size.clip(upper=max_n_contracts)
 
         target_trade_size = target_size - prev_pos
-
-        #target_trade_size_pct = target_size/prev_pos - 1
-        #is_half_sell_stop_ongoing = (target_trade_size_pct<-0.5)
-
 
         # Position Value & Exposition with Target Size
         target_pos_value = (asset_price * target_size).sum(axis=1)
@@ -197,17 +191,8 @@ class BacktestVectorized:
 
         # Process sell orders
         is_sell = (target_trade_size < 0)
-        #is_swan_active= (prev_pos>0)
-        #is_sell = is_swan_active #Always Black Swan Stop
-
         B_S.where(~is_sell, 'Sell', inplace=True)
         exectype.where(~is_sell, 'Stop', inplace=True)
-
-        # We take the best available protection (Max of Technical vs Swan)
-        # This ensures the order is 'placed' at this price
-        #Only apply when not another sell orther for 50% of  previous is active
-        #effective_sell_stop = np.maximum(sell_stop_price, swan_stop_price)
-        #sell_stop_price.where(is_half_sell_stop_ongoing, effective_sell_stop,inplace=True)
 
         sell_stop_price_adj = sell_stop_price.clip(lower=None, upper=opens)
         prices.where(~is_sell, sell_stop_price_adj, inplace=True)
@@ -370,9 +355,6 @@ def compute_backtest_vectorized(
     # Get settings values from settings
     mults_array,startcash, exposition_lim, commision, max_n_contracts=get_settings_values(settings,positions.columns)
 
-    # NEW: Calculate the Black Swan levels
-    swan_stop_price = compute_black_swan_thresholds(closes, lows)
-
     # Get Buy/Sell Triggers & Stop Prices
     buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(positions,closes, lows, highs)
 
@@ -403,8 +385,7 @@ def compute_backtest_vectorized(
     pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_until_convergence(
         weights_div_asset_price, asset_price, opens, highs, lows, closes, mults_array,
         portfolio_value_usd, positions, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
-        exchange_rate, startcash_usd, startcash, exposition_lim, pos,max_n_contracts=max_n_contracts,
-        swan_stop_price=swan_stop_price  # <--- Pass it here
+        exchange_rate, startcash_usd, startcash, exposition_lim, pos,max_n_contracts=max_n_contracts
     )
 
     # Add Series to dict - optimize by updating directly
@@ -476,9 +457,8 @@ def compute_out_of_backtest_loop(closes, weights, mults):
     asset_price = closes.multiply(mults, axis=1)  # USD
     yesterday_asset_price = asset_price.shift(1)
     yesterday_asset_price_mean = yesterday_asset_price.rolling(5, min_periods=1).mean()
-    #weights_mean = weights.rolling(5, min_periods=1).mean()
-    #weights_div_asset_price = weights_mean / yesterday_asset_price_mean
-    weights_div_asset_price = weights / yesterday_asset_price_mean
+    weights_mean = weights.rolling(5, min_periods=1).mean()
+    weights_div_asset_price = weights_mean / yesterday_asset_price_mean
 
     return weights_div_asset_price, asset_price
 
@@ -494,14 +474,19 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
     weights_dn = weights.lt(weights_max, axis=0)
 
     # Lows Uptrend --> Yesterday low > previous 5 days lowest
-    #lows_min = lows.shift(1).rolling(5).min()
-    #lows_up = lows.ge(lows_min, axis=0)
+    lows_min = lows.shift(1).rolling(5).min()
+    lows_up = lows.ge(lows_min, axis=0)
 
-    #Compute Volatility Sell Stop
-    sell_stop_price = compute_volat_thresholds(closes, lows, delta=6)
-    lows_up = lows.ge(sell_stop_price, axis=0)
+    # Closes Uptrend
+    if False:
+        closes_mean_fast=closes.shift(1).rolling(5).mean()
+        closes_mean_slow=closes.shift(1).rolling(22).mean()
+        closes_up_fast=closes_mean_fast.shift(1).gt(closes_mean_slow.shift(4))
+        closes_up_slow=closes_mean_slow.shift(1).gt(closes_mean_slow.shift(4))
+        closes_mean_crosed_up=closes_mean_fast.mean().ge(closes_mean_slow)
+        closes_uptrend=  closes_up_fast & closes_up_slow #& closes_mean_crosed_up #
 
-     # Highs Downtrend --> Yesterday high < previous 5 days highest
+    # Highs Downtrend --> Yesterday high < previous 5 days highest
     highs_max = highs.shift(1).rolling(5).max()
     highs_dn = highs.le(highs_max, axis=0)
 
@@ -512,9 +497,8 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
     sell_trigger = highs_dn & weights_dn # Highs Downtrend
 
     # Get Sell Stop Price
-    #sell_stop_price = lows_min.rolling(22).max()
-
-
+    low_keep = lows_min.rolling(22).max()
+    sell_stop_price = low_keep
 
     # Get Buy Stop Price
     high_keep = highs_max.rolling(22).min()
@@ -606,7 +590,7 @@ def create_log_history(bt_log_dict):
         log_history.loc[is_executed & is_ticker, ticker] = log_history.loc[is_executed & is_ticker, 'pos']
 
     log_history[tickers] = log_history[tickers].fillna(method='ffill')
-    log_history[tickers] = log_history[tickers].fillna(0).astype(int)
+    log_history[tickers] = log_history[tickers].astype(int)
 
     # Rename event
     event_values = ['Sell Order Created', 'Sell Order Canceled', 'Sell Order Executed', 'Buy Order Created', 'Buy Order Canceled', 'Buy Order Executed', 'End of Day']
@@ -665,45 +649,3 @@ def bt_qstats_report(bt_log_dict, closes,add_days,exchange_rate):
     webbrowser.open(q_filename)
 
     return q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename
-
-def compute_black_swan_thresholds(closes, lows):
-    """
-    Calculates the volatility-based floor for Black Swan events.
-    Uses 2-sigma of the (Close - Low) 'downside wicks'.
-    """
-    # Downside noise: difference between close and intraday low
-    downside_noise = (closes - lows)
-
-    # 2-sigma buffer based on previous 20 days of downside wicks
-    # Use shift(1) to avoid look-ahead bias
-    swan_buffer = 2 * downside_noise.shift(1).rolling(20).std()
-
-    # The floor level
-    swan_stop_price = closes.shift(1) - swan_buffer
-
-    return swan_stop_price.fillna(0)
-
-def compute_volat_thresholds(closes, lows,delta=2):
-    """
-    Calculates the volatility-based floor for Black volat events.
-    Uses 2-sigma of the (Close - Low) 'downside wicks'.
-    """
-    # Downside noise: difference between close and intraday low
-    downside_noise = (closes.shift(1) - lows).shift(1)
-
-    # 2-sigma buffer based on previous 20 days of downside wicks
-    # Use shift(1) to avoid look-ahead bias
-    volat_buffer =downside_noise.rolling(20).mean() + delta * downside_noise.rolling(20).std()
-
-    volat_buffer = volat_buffer.clip(lower=0.0001*closes.shift(1), upper=0.12*closes.shift(1))
-
-    # The floor level
-    volat_stop_price = closes.shift(1) - volat_buffer
-
-    #Keep higher value
-    volat_stop_price = volat_stop_price.rolling(22).max().fillna(0)
-
-    #keep real value not over open price
-    #volat_stop_price =volat_stop_price.clip(upper=opens)
-
-    return volat_stop_price

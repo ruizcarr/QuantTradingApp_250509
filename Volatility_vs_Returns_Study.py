@@ -1,9 +1,6 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
-
-from Backtest_Vectorized import plot_df
 
 # Wider print limits
 pd.set_option("display.max_columns", None)
@@ -12,7 +9,6 @@ pd.set_option('display.width', None)
 import warnings
 warnings.filterwarnings('ignore')
 
-from Trading_Markowitz import compute,process_log_data
 from config.trading_settings import settings
 import Market_Data_Feed as mdf
 

@@ -78,7 +78,7 @@ def compute(settings,data_ind):
 
             yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
             weekago= pd.Timestamp.today().normalize() - pd.Timedelta(days=7)
-            print("log_history\n", log_history[log_history["date_time"]>=weekago])
+            print("log_history\n", log_history[log_history["date_time"]>=weekago].tail(40))
 
 
             #print("trading_history\n", trading_history.tail(30))

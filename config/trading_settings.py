@@ -12,7 +12,7 @@ settings =retrieve_training_settings()
 settings['trading_app_only']=True
 settings['start'] = '2020-01-01' # '2019-01-01'
 settings['end'] =(date.today() + timedelta(days=1)).isoformat()
-settings['startcash'] = 230000#2400000 #47000 #56500#210000#35000 #30650 #27800 #54300 #52300 # #EUR
+settings['startcash'] = 210000#240000 #47000 #56500#210000#35000 #30650 #27800 #54300 #52300 # #EUR
 #settings['verbose'] = True
 #settings['qstats'] = True
 #settings['do_BT']= True

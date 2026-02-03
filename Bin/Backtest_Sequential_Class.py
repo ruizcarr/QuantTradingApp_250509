@@ -375,7 +375,7 @@ def compute_backtest_sequential(
     # Quantstats Report
     if settings.get('qstats', False):
         q_title = 'Cash Backtest Markowitz Sequential'
-        path = "results\\"
+        path = "../results\\"
         q_filename = os.path.abspath(path + q_title + '.html')
         q_returns = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-settings['add_days']]
         q_benchmark_ticker = 'ES=F'

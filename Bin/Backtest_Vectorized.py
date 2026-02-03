@@ -13,6 +13,190 @@ from sympy.core.expr import unchanged
 #Cash Backtest with backtest Vectorized
 
 def compute_backtest_vectorized(weights, settings, data_dict):
+    # 1. PREPARE DATA (Same as before)
+    desired_order = list(data_dict.keys())
+    ohlc = {col: pd.concat([data_dict[key][col] for key in desired_order], axis=1, keys=desired_order)
+            for col in ['Open', 'High', 'Low', 'Close']}
+
+    opens, highs, lows, closes = ohlc['Open'], ohlc['High'], ohlc['Low'], ohlc['Close']
+    start = weights[(weights > 0).any(axis=1)].index[0]
+    weights, opens, highs, lows, closes = [df[start:] for df in [weights, opens, highs, lows, closes]]
+
+    # 2. PRE-COMPUTE REQUISITES
+    mults_array = np.array([settings['mults'][tick] for tick in closes.columns])
+    exchange_rate = 1 / closes["EURUSD=X"].shift(1).fillna(method='bfill')
+
+    # Calculate triggers and weights_div_asset_price once
+    buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(weights, lows, highs)
+    weights_div_asset_price, asset_price = compute_out_of_backtest_loop(closes, weights, mults_array)
+
+    # 3. CALL THE VECTORIZED ENGINE (Replacing the loop)
+    # We pass the necessary dfs directly into the linear calculation
+    portfolio_value_eur, pos, bt_log_dict = compute_backtest_fully_vectorized(
+        weights_div_asset_price,
+        asset_price,
+        opens, highs, lows, closes,
+        mults_array,
+        settings,
+        exchange_rate,
+        sell_stop_price  # Pass your risk management price here
+    )
+
+    # 4. LOGGING & REPORTS
+    bt_log_series_dict = {'pos': pos, 'portfolio_value': bt_log_dict['portfolio_value_usd']}
+    bt_log_dict.update(bt_log_series_dict)
+    log_history = create_log_history(bt_log_dict)
+
+    # ... (QuantStats logic remains the same) ...
+    return bt_log_dict, log_history
+
+
+def compute_backtest_fully_vectorized(weights_div_asset_price, asset_price, opens, highs, lows, closes, mults,
+                                      portfolio_value_usd_initial, commision, weights,
+                                      buy_stop_price, sell_stop_price, exchange_rate,
+                                      startcash_usd, startcash, exposition_lim):
+    # 1. INITIALIZE ARRAYS
+    # We use T-1 Equity to break the loop. This is the real-world standard.
+    # To be EXACTLY like the loop, we use the previous day's finalized value.
+    portfolio_value_usd = pd.Series(index=weights.index, dtype=float)
+    portfolio_value_usd.iloc[0] = startcash_usd
+
+    # Pre-calculate the portfolio_to_invest (the YTD minimum)
+    # Using shift(1) ensures we don't need to loop to find 'today's' value
+    portfolio_to_invest = portfolio_value_usd.shift(1).rolling(22 * 12, min_periods=1).min()
+    portfolio_to_invest.iloc[0] = startcash_usd  # Handle first day
+
+    # 2. TARGET SIZE LOGIC (Replicating your specific constraints)
+    target_size_raw = weights_div_asset_price.multiply(portfolio_to_invest, axis=0).fillna(0)
+
+    # Upgrade logic
+    mask = target_size_raw > 0.20
+    for tick in ["CL=F", "BTC-USD", "EURUSD=X"]:
+        if tick in mask.columns: mask[tick] = False
+
+    target_size_raw[mask] = target_size_raw[mask].clip(lower=1)
+    target_size = round(target_size_raw, 0).astype(int)
+
+    # 3. POSITION & TRADE CALCULATION
+    prev_pos = target_size.shift(1).fillna(0).astype(int)
+    target_trade_size = target_size - prev_pos
+
+    # 4. EXPOSITION FILTER
+    target_pos_value = (asset_price * target_size).sum(axis=1)
+    exposition_is_low = (target_pos_value / portfolio_to_invest) < exposition_lim
+    # Expand mask to all columns
+    exposition_mask = pd.DataFrame({col: exposition_is_low for col in weights.columns})
+
+    # 5. ORDER & PRICE LOGIC
+    is_buy = (target_trade_size > 0) & exposition_mask
+    is_sell = (target_trade_size < 0)
+
+    # Replicate Stop Price Clipping
+    b_stop = buy_stop_price.clip(lower=opens, upper=None)
+    s_stop = sell_stop_price.clip(lower=None, upper=opens)
+
+    # Assign prices based on Buy/Sell
+    prices = opens.copy()
+    prices = prices.where(~is_buy, b_stop)
+    prices = prices.where(~is_sell, s_stop)
+
+    # 6. BROKER EXECUTION (Price check)
+    prices_in_market = (prices >= lows) & (prices <= highs)
+    exec_size = target_trade_size.where(prices_in_market, 0)
+    exec_price = prices.where(prices_in_market, 0)
+
+    # Update Final Positions
+    pos = prev_pos.where(~prices_in_market, prev_pos + exec_size)
+
+    # 7. RETURNS & EQUITY CURVE (The Core Calculation)
+    hold_pnl = (prev_pos * (asset_price.diff().fillna(0))).sum(axis=1)
+    trading_pnl = (exec_size * (closes - exec_price).multiply(mults, axis=1)).sum(axis=1)
+    trading_cost = (exec_size.abs() * commision).sum(axis=1)
+
+    daily_returns_usd = hold_pnl + trading_pnl - trading_cost
+
+    # Final series construction
+    portfolio_value_usd = startcash_usd + daily_returns_usd.cumsum()
+    portfolio_value_eur = startcash + (daily_returns_usd * exchange_rate).cumsum()
+
+    # 8. CONSTRUCT BT_LOG_DICT (Exactly as original)
+    bt_log_dict = {
+        'pos': pos,
+        'portfolio_value_eur': portfolio_value_eur,
+        'dayly_profit_eur': daily_returns_usd * exchange_rate,
+        'commission': trading_cost,
+        'exposition': target_pos_value / portfolio_to_invest,
+        'exchange_rate': exchange_rate,
+        # Required for create_log_history
+        'order_dict': {'date_time': weights.index, 'event': is_buy.map(lambda x: 'Created' if x else 'None')},
+        'broker_dict': {'event': prices_in_market.map(lambda x: 'Executed' if x else 'Canceled')}
+    }
+
+    return pos, portfolio_value_usd, bt_log_dict
+
+
+def compute_backtest_fully_vectorized_nok(weights_div_asset_price, asset_price, opens, highs, lows, closes, mults,
+                                      settings, exchange_rate):
+    """
+    Calculates the backtest without iterative loops by using lagged portfolio values
+    for sizing and vectorized execution logic.
+    """
+    startcash_usd = settings['startcash'] / exchange_rate.iloc[0]
+    commission = settings.get('commission', 5)
+    exposition_lim = settings.get('exposition_lim', 1.0)
+
+    # 1. CALCULATE PORTFOLIO VALUE (Vectorized approximation)
+    # We use a running cumulative sum of returns to estimate equity for sizing.
+    # Initially, we'll calculate target sizes based on previous day's adjusted equity.
+
+    # Placeholder for the cumulative PnL to determine 'portfolio_to_invest'
+    # In a pure vectorized setup, we often use the cumulative return of the
+    # strategy at 100% weights to estimate sizing capacity.
+
+    # For a more precise sizing without loops, we assume sizing is based on
+    # the 'startcash' + accumulated returns of the strategy up to T-1.
+    # Note: This requires a simplified return series first.
+    raw_returns = (weights_div_asset_price.shift(1) * (closes - opens)).sum(axis=1)
+    est_portfolio_value = startcash_usd + raw_returns.cumsum().shift(1).fillna(0)
+
+    # 2. TARGET SIZING (T-1 Basis)
+    portfolio_to_invest = est_portfolio_value.rolling(22 * 12, min_periods=1).min()
+    target_size = (weights_div_asset_price.multiply(portfolio_to_invest, axis=0)).round().fillna(0).astype(int)
+
+    # 3. TRANSACTION LOGIC
+    prev_pos = target_size.shift(1).fillna(0).astype(int)
+    target_trade_size = target_size - prev_pos
+
+    # 4. BROKER EXECUTION (Vectorized)
+    # We define the 'stop' or 'limit' price for sells/buys
+    # For this example, we'll assume market orders at Open for simplicity
+    # or use your logic for sell_stop_price
+    exec_price = opens  # Or your stop_price logic
+
+    # Check if the market actually reached our price
+    is_executed = (exec_price >= lows) & (exec_price <= highs)
+    actual_exec_size = target_trade_size.where(is_executed, 0)
+
+    # 5. PnL CALCULATION (The "Matrix" way)
+    # Hold Returns: Old positions * (Today Close - Yesterday Close)
+    hold_pnl = (prev_pos * (closes.diff().fillna(0) * mults)).sum(axis=1)
+
+    # Trade Returns: New trades * (Today Close - Execution Price)
+    trade_pnl = (actual_exec_size * (closes - exec_price) * mults).sum(axis=1)
+
+    # Costs
+    total_commissions = (actual_exec_size.abs() * commission).sum(axis=1)
+
+    daily_pnl_usd = hold_pnl + trade_pnl - total_commissions
+
+    # 6. FINAL ACCOUNTING
+    portfolio_value_usd = startcash_usd + daily_pnl_usd.cumsum()
+    portfolio_value_eur = portfolio_value_usd * (1 / exchange_rate)  # Adjusted for your rate logic
+
+    return portfolio_value_eur, actual_exec_size
+
+
+def compute_backtest_vectorized_ok(weights, settings, data_dict):
 
         #Data from settings
         mults = settings['mults']
@@ -78,7 +262,7 @@ def compute_backtest_vectorized(weights, settings, data_dict):
         # Quanstats Report
         if settings['qstats']:
             q_title = 'Cash Backtest Markowitz Vectorized'
-            path = "results\\"
+            path = "../results\\"
             q_filename = os.path.abspath(path+ q_title + '.html')
             q_returns = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-settings['add_days']]
             q_benchmark_ticker='ES=F'
@@ -89,35 +273,6 @@ def compute_backtest_vectorized(weights, settings, data_dict):
 
 
         return bt_log_dict,log_history
-
-def compute_backtest_loop_OK(weights_div_asset_price, asset_price,opens,highs,lows,closes,mults,
-                         portfolio_value_usd,commision,weights,
-                         buy_trigger, sell_trigger, sell_stop_price,
-                         exchange_rate,startcash_usd,startcash,exposition_lim,pos):
-
-    error,error_pos,i=1,1,0
-    while ((error>0.001) |(error_pos>0)) & (i<200) :
-        prev_end_value=portfolio_value_usd.iloc[-1]
-        prev_pos=pos
-        pos, portfolio_value_usd,bt_log_dict=\
-            compute_backtest(weights_div_asset_price, asset_price,opens,highs,lows,closes,mults,
-                             portfolio_value_usd,commision,weights,
-                             buy_trigger, sell_trigger, sell_stop_price,
-                             exchange_rate,startcash_usd,startcash,exposition_lim,pos)
-
-        #Portfolio value Iteration Error
-        error=abs(prev_end_value/portfolio_value_usd.iloc[-1]-1)
-
-        # Position value Iteration Error
-        zeros_df=closes*0
-        error_pos = zeros_df.where(~bt_log_dict['iter_error'], 1).sum().sum()
-        pos_equal=pos.equals(prev_pos)
-
-        i+=1
-
-        #print(i,error,error_pos,portfolio_value_usd[-1],pos_equal)
-
-    return pos, portfolio_value_usd,bt_log_dict,i,error,error_pos
 
 def compute_backtest_loop(weights_div_asset_price, asset_price,opens,highs,lows,closes,mults,
                          portfolio_value_usd,commision,weights,

@@ -17,7 +17,7 @@ pd.set_option('display.width', None)
 import warnings
 warnings.filterwarnings('ignore')
 
-from Backtest_Vectorized_Class import compute_backtest_vectorized
+
 #from Backtest_Vectorized import compute_backtest_vectorized
 from Markowitz_Vectorized import compute_optimized_markowitz_d_w_m
 from WalkForwardTraining import WalkForwardTraining
@@ -109,8 +109,8 @@ def run(settings):
     start = time.time()
 
     if settings['do_BT'] :
+        from Backtest_Vectorized_Class import compute_backtest_vectorized
         settings['tickers'] = list(positions.columns)
-        #log_history,sell_stop_price,bt_returns_eur=bt.run(positions, settings, data.data_dict)
         _, log_history = compute_backtest_vectorized(positions, settings, data.data_dict)
 
         # End Of day Values From Log History
@@ -119,7 +119,7 @@ def run(settings):
         if settings['verbose']:
              # Print Backtrader Results
             print('\nCash BackTest with Backtrader ')
-            print("log_history\n", log_history.tail(20))
+            print("log_history\n", log_history.tail(30))
             print("eod_log_history\n", eod_log_history.tail(20))
 
     else:

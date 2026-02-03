@@ -2,17 +2,11 @@
 
 #Import libraries and functions
 import numpy as np,random
-from quantstats.stats import volatility
-
-from Backtest_Vectorized import plot_df
 
 np.random.seed(42)
 random.seed(42)
 import pandas as pd
 import matplotlib.pyplot as plt
-import datetime
-import time
-import os.path
 
 # Wider print limits
 pd.set_option("display.max_columns", None)
@@ -21,16 +15,12 @@ pd.set_option('display.width', None)
 import warnings
 warnings.filterwarnings('ignore')
 
-from Backtest_Vectorized_Class import compute_backtest_vectorized
 #from Backtest_Vectorized import compute_backtest_vectorized
-from Markowitz_Vectorized import compute_optimized_markowitz_d_w_m
-from WalkForwardTraining import WalkForwardTraining
 import Market_Data_Feed as mdf
-from utils import mean_positions
-
 
 #Get SETTINGS
-from config import settings,utils
+from config import settings
+
 settings=settings.get_settings() #Edit Settings Dict at file config/settings.py
 
 def run(settings):
