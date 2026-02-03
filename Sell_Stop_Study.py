@@ -58,7 +58,7 @@ def compute_volat_thresholds(opens,closes, lows,delta=2):
     volat_stop_price = volat_stop_price.rolling(22).max().fillna(0)
 
     #keep real value not over open price
-    volat_stop_price =volat_stop_price.clip(upper=opens)
+    #volat_stop_price =volat_stop_price.clip(upper=opens)
 
     return volat_stop_price
 
@@ -101,7 +101,7 @@ def get_sell_stop_price_as_backtest(lows):
 
     return sell_stop_price
 
-volat_stop_price=compute_volat_thresholds(opens,closes, lows,delta=5)
+volat_stop_price=compute_volat_thresholds(opens,closes, lows,delta=6)
 
 sell_stop_price=get_sell_stop_price_as_backtest(lows)
 

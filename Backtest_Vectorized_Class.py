@@ -498,12 +498,16 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
     #lows_up = lows.ge(lows_min, axis=0)
 
     #Compute Volatility Sell Stop
-    sell_stop_price = compute_volat_thresholds(closes, lows, delta=6)
+    sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=6)
     lows_up = lows.ge(sell_stop_price, axis=0)
 
-     # Highs Downtrend --> Yesterday high < previous 5 days highest
-    highs_max = highs.shift(1).rolling(5).max()
-    highs_dn = highs.le(highs_max, axis=0)
+    # Compute Volatility Buy Stop
+    buy_stop_price = compute_buy_volat_stop_price(closes, highs, delta=1)
+    highs_dn = highs.le(buy_stop_price, axis=0)
+
+    # Highs Downtrend --> Yesterday high < previous 5 days highest
+    #highs_max = highs.shift(1).rolling(5).max()
+    #highs_dn = highs.le(highs_max, axis=0)
 
     # Buy Trigger
     buy_trigger = lows_up & weights_up
@@ -514,12 +518,10 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
     # Get Sell Stop Price
     #sell_stop_price = lows_min.rolling(22).max()
 
-
-
     # Get Buy Stop Price
-    high_keep = highs_max.rolling(22).min()
-    highs_std = highs.rolling(22).std().shift(1)
-    buy_stop_price = high_keep + highs_std * 0.5
+    #high_keep = highs_max.rolling(22).min()
+    #highs_std = highs.rolling(22).std().shift(1)
+    #buy_stop_price = high_keep + highs_std * 0.5
 
     #Debug Plot
     debug=False
@@ -683,7 +685,7 @@ def compute_black_swan_thresholds(closes, lows):
 
     return swan_stop_price.fillna(0)
 
-def compute_volat_thresholds(closes, lows,delta=2):
+def compute_sell_volat_stop_price(closes, lows,delta=2):
     """
     Calculates the volatility-based floor for Black volat events.
     Uses 2-sigma of the (Close - Low) 'downside wicks'.
@@ -702,6 +704,32 @@ def compute_volat_thresholds(closes, lows,delta=2):
 
     #Keep higher value
     volat_stop_price = volat_stop_price.rolling(22).max().fillna(0)
+
+    #keep real value not over open price
+    #volat_stop_price =volat_stop_price.clip(upper=opens)
+
+    return volat_stop_price
+
+def compute_buy_volat_stop_price(closes, highs,delta=2):
+    """
+    Calculates the volatility-based floor for volat events.
+    Uses 2-sigma of the (High-Close) 'upside wicks'.
+    """
+    # Upside noise: difference between intraday High and previous close
+    # Use shift(1) to avoid look-ahead bias
+    upside_noise = (highs-closes.shift(1)).shift(1)
+
+    # delta-sigma buffer based on previous 20 days of downside wicks
+
+    volat_buffer =upside_noise.rolling(20).mean() + delta * upside_noise.rolling(20).std()
+
+    #volat_buffer = volat_buffer.clip(lower=0.0001*closes.shift(1), upper=0.12*closes.shift(1))
+
+    # The floor level
+    volat_stop_price = closes.shift(1) + volat_buffer
+
+    #Keep lower value
+    volat_stop_price = volat_stop_price.rolling(22).min().fillna(0)
 
     #keep real value not over open price
     #volat_stop_price =volat_stop_price.clip(upper=opens)
