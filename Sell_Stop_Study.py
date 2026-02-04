@@ -103,6 +103,18 @@ def get_sell_stop_price_as_backtest(lows):
 
 volat_stop_price=compute_volat_thresholds(opens,closes, lows,delta=6)
 
+# Lows Uptrend
+uptrend = closes.shift(1).ge(volat_stop_price, axis=0)*1
+uptrend=uptrend+0.25
+uptrend_returns = uptrend*tickers_returns
+uptrend_cumreturns =(1+uptrend_returns).cumprod()
+for ticker in uptrend.columns:
+    plot_df1=pd.DataFrame()
+    plot_df1['uptrend_cumreturns']=uptrend_cumreturns[ticker]
+    plot_df1['cum_rets'] = cum_rets[ticker]
+    plot_df1['uptrend'] = uptrend[ticker]
+    plot_df1.plot(title=ticker)
+
 sell_stop_price=get_sell_stop_price_as_backtest(lows)
 
 volat_stop_pct=volat_stop_price/closes.shift(1)-1
@@ -149,15 +161,14 @@ for ticker in lows.columns:
     ax.plot(plot_df.index, plot_df['low'], label='Daily Low', color='royalblue', lw=1.5)
     ax.plot(plot_df.index, plot_df['close'], label='Daily Close', color='black', lw=1.5)
     ax.plot(plot_df.index, plot_df['volat_stop_price'], label='volat Stop', color='crimson', linestyle='--', alpha=0.8)
-    ax.plot(plot_df.index, plot_df['sell_stop_price'], label='Sell Stop', color='red', linestyle='--', alpha=0.8)
+    #ax.plot(plot_df.index, plot_df['sell_stop_price'], label='Sell Stop', color='red', linestyle='--', alpha=0.8)
 
 
     # 4. Highlight the "Crosses"
     if not breaches.empty:
         ax.scatter(breaches.index, breaches['volat_stop_price'],
                    color='darkred', marker='v', s=100, zorder=5, label='volat Breach')
-        ax.scatter(re_open_price.index, re_open_price[ticker],
-                   color='green', marker='^', s=100, zorder=5, label='Re-Open after Breach')
+        #ax.scatter(re_open_price.index, re_open_price[ticker],color='green', marker='^', s=100, zorder=5, label='Re-Open after Breach')
 
         # Optional: Shade the area where the price is below the stop
         #ax.fill_between(plot_df.index, plot_df['volat_stop_price'], plot_df['volat_stop_price'],where=breach_condition, color='red', alpha=0.2)

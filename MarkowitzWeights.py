@@ -39,9 +39,6 @@ class MarkowitzWeights:
         prior = np.eye(self.size) * np.mean(np.diag(sample_cov))
         self.covariance_matrix = (1 - shrinkage) * sample_cov + shrinkage * prior
 
-
-
-
         # 4. Optimization
         # We ALWAYS use the same starting point logic for 100% consistency
         # Warm start is used for speed, but 'x0' is used if it's the first run
@@ -49,7 +46,7 @@ class MarkowitzWeights:
 
         self.results = self.compute_portfolio(start_x, settings['tickers_bounds'], volatility_target)
 
-        # Save state for the next weekly window
+        # Save state for the next  window
         MarkowitzWeights._last_weights = self.results.x
         MarkowitzWeights._counter += 1
 
