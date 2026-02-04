@@ -374,7 +374,7 @@ def compute_backtest_vectorized(
     swan_stop_price = compute_black_swan_thresholds(closes, lows)
 
     # Get Buy/Sell Triggers & Stop Prices
-    buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(positions,closes, lows, highs)
+    buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(positions,opens,closes, lows, highs)
 
     # Get historical of Exchange Rate EUR/USD (day after)
     exchange_rate = 1 / closes["EURUSD=X"].shift(1).fillna(method='bfill')
@@ -483,7 +483,7 @@ def compute_out_of_backtest_loop(closes, weights, mults):
     return weights_div_asset_price, asset_price
 
 
-def compute_buy_sell_triggers(weights, closes,lows, highs):
+def compute_buy_sell_triggers(weights,opens, closes,lows, highs):
     """Calculate buy/sell triggers and stop prices."""
     # Weights Uptrend --> weight > previous 5 days lowest
     weights_min = weights.shift(1).rolling(5).min()
@@ -499,18 +499,16 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
 
     #Compute Volatility Sell Stop
     sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=6)
+
+    # Lows Uptrend
     lows_up = lows.ge(sell_stop_price, axis=0)
 
-    # Compute Volatility Buy Stop
-    buy_stop_price = compute_buy_volat_stop_price(closes, highs, delta=1)
-    highs_dn = highs.le(buy_stop_price, axis=0)
-
     # Highs Downtrend --> Yesterday high < previous 5 days highest
-    #highs_max = highs.shift(1).rolling(5).max()
-    #highs_dn = highs.le(highs_max, axis=0)
+    highs_max = highs.shift(1).rolling(5).max()
+    highs_dn = highs.le(highs_max, axis=0)
 
     # Buy Trigger
-    buy_trigger = lows_up & weights_up
+    buy_trigger =  weights_up & lows_up
 
     # Sell Trigger
     sell_trigger = highs_dn & weights_dn # Highs Downtrend
@@ -522,6 +520,10 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
     #high_keep = highs_max.rolling(22).min()
     #highs_std = highs.rolling(22).std().shift(1)
     #buy_stop_price = high_keep + highs_std * 0.5
+
+    # Compute Volatility Buy Stop
+    buy_stop_price = compute_buy_volat_stop_price(closes, highs, delta=1)
+
 
     #Debug Plot
     debug=False

@@ -10,8 +10,9 @@ settings =retrieve_training_settings()
 
 # Update Settings to Trading Settings
 settings['trading_app_only']=True
-settings['start'] = '2020-01-01' # '2019-01-01'
+settings['start'] = '2020-01-01' # '2019-01-01''2016-01-01' #
 settings['end'] =(date.today() + timedelta(days=1)).isoformat()
+#settings['end'] = '2023-12-31'
 settings['startcash'] = 200000#240000 #47000 #56500#210000#35000 #30650 #27800 #54300 #52300 # #EUR
 #settings['verbose'] = True
 #settings['qstats'] = True
