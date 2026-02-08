@@ -87,12 +87,14 @@ def main(settings):
 
             log_history, _,bt_log_dict = compute(settings, data_ind)
 
-            return data, log_history,bt_log_dict
+            last_compute_datatime = pd.Timestamp.now(tz="Europe/Madrid")
+
+            return data, log_history,bt_log_dict,last_compute_datatime
 
         # ---------------- Main Execution ----------------
 
         # Now load (cached) data
-        data, log_history,bt_log_dict = load_and_compute_data(settings)
+        data, log_history,bt_log_dict,last_compute_datatime = load_and_compute_data(settings)
 
         returns = data.tickers_returns
         closes = data.tickers_closes
@@ -128,6 +130,7 @@ def main(settings):
             closes,
             intraday_tickers_returns, #To avoid yahoo previous day mising data problems
             settings,
+            last_compute_datatime,
             sidebar=False,
             daysback=st.session_state.daysback,
             data_show=st.session_state.data_show,
@@ -443,7 +446,7 @@ y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
 
     return alt_chart
 
-def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22, data_show='returns', chart=True):
+def display_tickers_data(closes, returns, settings, last_compute_datatime,sidebar=False, daysback=3*22, data_show='returns', chart=True):
     """
     Display market data (closes or returns) for all tickers.
     Always shows today's data based on 'add_days', avoiding system datetime.
@@ -460,10 +463,10 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
     returns_today = returns.iloc[today_idx]
 
     # Header string: use the index date instead of datetime.now()
-    #today_date = closes.index[today_idx].date()
-    today_date = closes.index[today_idx]#.date()
-    market_data_head_1 = f"**Market Data: {today_date}**"
-    market_data_head_2 = "(data with 15min delay)"
+    last_data_date = closes.index[today_idx].tz_localize(tz="Europe/Madrid")#.date()
+
+    #st.write(market_data_head_1)
+    #st.write(closes.tail(6))
 
     def get_chart_data(data, daysback=5, data_show='returns'):
         # Pick last 'daysback' rows including today
@@ -494,22 +497,32 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
             #cols[0].write(market_data_head_1)
             #cols[0].write(market_data_head_2)
 
+            #Settle last_refresh
+            if last_data_date <= (last_compute_datatime - pd.Timedelta(days=1)):
+                last_refresh = last_data_date + pd.Timedelta(days=0, hours=23, minutes=59)
+            else:
+                last_refresh = last_compute_datatime.copy()
+
+
             # Initialize timestamp on first run
             if "last_refresh" not in st.session_state:
-                st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid")
+                st.session_state["last_refresh"] = last_refresh.strftime('%Y-%m-%d  %H:%M')  #pd.Timestamp.now(tz="Europe/Madrid")
 
 
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh Data"):
                 st.cache_data.clear()
                 st.cache_resource.clear()
-                st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid")
+                #datetime_now=pd.Timestamp.now(tz="Europe/Madrid")
+
+                st.session_state["last_refresh"] = last_refresh.strftime('%Y-%m-%d %H:%M')
                 st.rerun() # <--- Force instant rerun
 
             # Display timestamp
             cols[0].write(
-                f"🕒 **{st.session_state['last_refresh'].strftime('%Y-%m-%d %H:%M')}** (data delayed 15min )"
+                f"🕒 **{st.session_state['last_refresh']}** (data delayed 15min )"
             )
+
 
         # Display metrics
         cols[i + 1].metric(label=f"**{ticker}**", value=close_fmt, delta=delta_val)

@@ -961,11 +961,11 @@ class Indicators:
         #chopp_factor = self.get_chopp_factor(cum_ret, ch_w)
 
         # Get Pair Correlation df
-        corr_df = self.get_pair_correlation(tickers_returns)
+        corr_df = self.get_pair_correlation(tickers_returns,window=22*3)
 
         # Get Bounds df
         upper_corr = 0.7
-        high_corr = (corr_df > upper_corr) * 1
+        #high_corr = (corr_df > upper_corr) * 1
 
         # High Correlation ES-NQ means strong trend
         if False:
@@ -1381,14 +1381,14 @@ class Indicators:
         return chopp_factor
 
     # Get Pair Correlation
-    def get_pair_correlation(self,tickers_returns):
+    def get_pair_correlation(self,tickers_returns,window=22):
         # Get Pair Correlation df
         corr_df = pd.DataFrame(index=tickers_returns.index)
         i = 0
         for ticker1 in tickers_returns.columns:
             i = i + 1
             for ticker2 in tickers_returns.columns[i:]:
-                corr_matrix = tickers_returns[[ticker1, ticker2]].rolling(window=22).corr()
+                corr_matrix = tickers_returns[[ticker1, ticker2]].rolling(window=window).corr()
                 corr_matrix.drop(columns=ticker1, inplace=True)
                 corr_matrix.drop(ticker2, level=1, inplace=True)
                 col = ticker1[:2] + '_' + ticker2[:2]
