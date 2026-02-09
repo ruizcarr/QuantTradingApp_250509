@@ -501,7 +501,7 @@ def display_tickers_data(closes, returns, settings, last_compute_datatime,sideba
             if last_data_date <= (last_compute_datatime - pd.Timedelta(days=1)):
                 last_refresh = last_data_date + pd.Timedelta(days=0, hours=23, minutes=59)
             else:
-                last_refresh = last_compute_datatime.copy()
+                last_refresh = last_compute_datatime
 
 
             # Initialize timestamp on first run

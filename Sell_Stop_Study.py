@@ -101,21 +101,24 @@ def get_sell_stop_price_as_backtest(lows):
 
     return sell_stop_price
 
-volat_stop_price=compute_volat_thresholds(opens,closes, lows,delta=6)
+volat_stop_price=compute_volat_thresholds(opens,closes, lows,delta=9)
 
-# Lows Uptrend
-uptrend = closes.shift(1).ge(volat_stop_price, axis=0)*1
-uptrend=uptrend+0.25
-uptrend_returns = uptrend*tickers_returns
-uptrend_cumreturns =(1+uptrend_returns).cumprod()
-for ticker in uptrend.columns:
-    plot_df1=pd.DataFrame()
-    plot_df1['uptrend_cumreturns']=uptrend_cumreturns[ticker]
-    plot_df1['cum_rets'] = cum_rets[ticker]
-    plot_df1['uptrend'] = uptrend[ticker]
-    plot_df1.plot(title=ticker)
+print(volat_stop_price)
 
-sell_stop_price=get_sell_stop_price_as_backtest(lows)
+if False:
+    # Lows Uptrend
+    uptrend = closes.shift(1).ge(volat_stop_price, axis=0)*1
+    uptrend=uptrend+0.25
+    uptrend_returns = uptrend*tickers_returns
+    uptrend_cumreturns =(1+uptrend_returns).cumprod()
+    for ticker in uptrend.columns:
+        plot_df1=pd.DataFrame()
+        plot_df1['uptrend_cumreturns']=uptrend_cumreturns[ticker]
+        plot_df1['cum_rets'] = cum_rets[ticker]
+        plot_df1['uptrend'] = uptrend[ticker]
+        plot_df1.plot(title=ticker)
+
+#sell_stop_price=get_sell_stop_price_as_backtest(lows)
 
 volat_stop_pct=volat_stop_price/closes.shift(1)-1
 volat_stop_pct.plot(title='Volatility Stop Price pct')
@@ -150,7 +153,7 @@ for ticker in lows.columns:
     plot_df['close'] = closes[ticker]
     plot_df['low'] = lows[ticker]
     plot_df['volat_stop_price'] = volat_stop_price[ticker]
-    plot_df['sell_stop_price'] = sell_stop_price[ticker]
+    #plot_df['sell_stop_price'] = sell_stop_price[ticker]
 
     # 2. Identify the Breach (The "Cross")
     # A Black volat breach occurs when the low price is <= the stop price

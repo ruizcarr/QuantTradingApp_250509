@@ -498,7 +498,7 @@ def compute_buy_sell_triggers(weights,opens, closes,lows, highs):
     #lows_up = lows.ge(lows_min, axis=0)
 
     #Compute Volatility Sell Stop
-    sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=6)
+    sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=6) #6
 
     # Lows Uptrend
     lows_up = lows.ge(sell_stop_price, axis=0)
