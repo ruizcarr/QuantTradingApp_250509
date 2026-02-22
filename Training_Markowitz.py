@@ -84,6 +84,7 @@ def run(settings):
     #print("Raw Test Positions\n", wft.raw_test_positions.tail(10))
     #print("Test Positions\n", wft.test_positions.tail(10))
 
+
     #After Test Optimization
     if settings['apply_after_test_opt']:
         from AfterTestOptimization import AfterTestOptimization
@@ -98,6 +99,18 @@ def run(settings):
         positions = apply_pos_constrain(positions,settings,tickers_returns )
 
         #print("Pos Constraints Positions\n", positions.tail(10))
+
+    #Get DDN Ltd Portfolio
+    # Import your specific class from your new file
+    from ddn_ltd_portfolio import DDNLimitedPortfolio
+
+    # Initialize the Class
+    portfolio_manager = DDNLimitedPortfolio(settings)
+
+    # Generate the Weights
+    # This runs the math and stores the intermediates inside the object
+    ddn_weights = portfolio_manager.compute_weights(tickers_returns)
+
 
     end = time.time()
     times['test'] = round(end - start, 3)

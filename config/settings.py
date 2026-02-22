@@ -21,7 +21,7 @@ settings={
     #Settings for Portfolio Optimization
     #'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.3)}, #
     'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.3)}, #
-    'volatility_target': 0.110,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115
+    'volatility_target': 0.11,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115
 
     #Settings for Cash Back Test
     'do_BT': True,
@@ -69,10 +69,10 @@ settings={
 
 
     # Parameters Markowitz
-    'mkwtz_scipy': True,  # Get Scipy Calculated optimal weights
+    'mkwtz_scipy': False,  # Get Scipy Calculated optimal weights
     'mkwtz_vectorized': True,  # Get Vectorized Calculated results
     'cov_w': 10, #10  # Optimized Windows in n - days
-    'cagr_w': [20,160,250,390],# Optimized Windows in n - days
+    'cagr_w': [160,250,390], #[20,160,250,390] # Optimized Windows in n - days
     'param_to_loop': 'cagr_w',
     'strat_periods':  [
                 'dayly',
@@ -88,6 +88,19 @@ settings={
     #Weights for mean
     'mean_weights_d_w_m':[3.0 , 1 , 0], #dayly, weekly, monthly weights
     'apply_utility_factor': True,
+
+    #Params for DDN Limited Portfolio
+    'ddn_ltd_portfolio': True,
+    'ddn_w': 30, #30 #22
+    'ddn_std_w': 10, #10 #22
+    'd_cagr_w': 180,  # 180
+    'lower_ddn_limit': 0.15,  #0.14 0.15 # by asset
+    'd_max_asset_weight': 0.20,  #0.20 # beffore mult
+    'd_risky_tickers': ['BTC-USD'],
+    'd_max_risky_tickers_weight': 0.08,
+    'd_excluded_tickers': ['CL=F', 'ES=F','EURUSD=X'],
+    'd_fix_mult': 1.00, #1.6
+    'd_max_total_leverage': 1.5,
 
     # Default Settings
     'trading_app_only': False,

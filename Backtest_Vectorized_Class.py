@@ -485,9 +485,9 @@ def compute_out_of_backtest_loop(closes, weights, mults):
 
 def compute_buy_sell_triggers(weights,opens, closes,lows, highs):
     """Calculate buy/sell triggers and stop prices."""
-    # Weights Uptrend --> weight > previous 5 days lowest
+    # Weights Uptrend --> weight >= previous 5 days lowest
     weights_min = weights.shift(1).rolling(5).min()
-    weights_up = weights.gt(weights_min, axis=0)
+    weights_up = weights.ge(weights_min, axis=0)
 
     # Weights Downtrend --> weight < previous 5 days highest
     weights_max = weights.shift(1).rolling(5).max()

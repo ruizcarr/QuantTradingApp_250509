@@ -146,7 +146,7 @@ def compute_optimized_markowitz_d_w_m(tickers_returns, settings):
     weight_sum_lim = settings['exposition_lim']
 
     # Generate Fix weights Combinations to find the best
-    xs = generate_xs_combinations(tickers_bounds, weight_sum_lim, step=0.10)
+    xs = generate_xs_combinations(tickers_bounds, weight_sum_lim, step=0.10) #0.10
 
     # Compute Dayly Markowitz Looping  over Selected Parameter
     dayly_weights_df, d_returns, returns_p,metrics_df, rolling_metrics_dict,markowitz_metrics_dicts = compute_markowitz_loop_over_ps(tickers_returns,xs, settings,strat_period='dayly')

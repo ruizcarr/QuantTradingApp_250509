@@ -30,8 +30,8 @@ class Strategy:
     """
     def __init__(self,settings,st_tickers_returns,indicators_dict):
 
-        if (not settings['mkwtz_scipy']) & (not settings['mkwtz_vectorized']) :
-            print(" Error at settings: Any Optimize Strategy must be selected 'mkwtz_scipy' or/and 'mkwtz_vectorized' ")
+        if (not settings['mkwtz_scipy'])  & (not settings['mkwtz_vectorized']) & (not settings['ddn_ltd_portfolio']):
+            print(" Error at settings: Any Optimize Strategy must be selected 'mkwtz_scipy' or/and 'mkwtz_vectorized' or 'ddn_ltd_portfolio' ")
             return
 
         if settings['mkwtz_scipy']:
@@ -57,6 +57,24 @@ class Strategy:
 
         #self.s_weights_df.plot(title='s_weights_df')
         #self.v_weights_df.plot(title='v_weights_df')
+
+        if settings['ddn_ltd_portfolio']:
+            # Get DDN Ltd Portfolio
+            from ddn_ltd_portfolio import DDNLimitedPortfolio
+
+            # Initialize the Class
+            portfolio_manager = DDNLimitedPortfolio(settings)
+
+            # Generate the Weights
+            # This runs the math and stores the intermediates inside the object
+            ddn_weights = portfolio_manager.compute_weights(st_tickers_returns)
+
+            if settings['mkwtz_vectorized'] or settings['mkwtz_scipy']:
+                ddn_weights = ddn_weights.reindex(self.weights_df.index)
+                self.weights_df=ddn_weights*0.6+self.weights_df*0.4 # ddn +vectorized
+                #self.weights_df = ddn_weights * 0.5 + self.weights_df * 0.5 # ddn +(vectorized+scipy)
+            else:
+                self.weights_df=ddn_weights
 
         if settings['apply_strategy_weights']:
             # Apply RSI and other additional Strategy Weights on top of Markowitz weights
