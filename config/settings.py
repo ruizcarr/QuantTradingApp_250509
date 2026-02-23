@@ -62,7 +62,7 @@ settings={
     'apply_post_opt': True,  # Calculate Post Optimization and get post_factor
     'trading_volatility_delta': -0.02,  # -0.02,  # trading_volatility_target= volatility_target + trading_volatility_delta
     'volatility_factor_diff_delta': {'up':1,'dn':1},#0.25,  # .25 #volatility_factor maximum abs diff
-    'vol_factor_max': 8.0, #2.0 #1.85 #1.65, #1.75
+    'vol_factor_max': 2.5, #2.0 #1.85 #1.65, #1.75
 
     #After Test Optimization Params
     'apply_after_test_opt': False,  # Calculate After Test Optimization
@@ -97,10 +97,10 @@ settings={
     'lower_ddn_limit': 0.15,  #0.14 0.15 # by asset
     'd_max_asset_weight': 0.20,  #0.20 # beffore mult
     'd_risky_tickers': ['BTC-USD'],
-    'd_max_risky_tickers_weight': 0.08,
+    'd_max_risky_tickers_weight': 0.10,
     'd_excluded_tickers': ['CL=F', 'ES=F','EURUSD=X'],
-    'd_fix_mult': 1.00, #1.6
-    'd_max_total_leverage': 1.5,
+    'd_fix_mult': 1.0, #1.6
+    'd_max_total_leverage': 1.0,
 
     # Default Settings
     'trading_app_only': False,

@@ -26,6 +26,18 @@ class DDNLimitedPortfolio:
         rolling_max = cumulative.rolling(window=window, min_periods=1).max()
         return (cumulative / rolling_max) - 1
 
+    def get_ddn_penalty(self, tickers_returns):
+        s = self.settings
+
+        # 1. Risk Prediction (3 x  DDN Std )
+        self.drawdown_df = self._get_drawdown(tickers_returns, s['ddn_w'])
+        self.risk_metric = 3 * self.drawdown_df.rolling(s['ddn_std_w']).std()
+
+        # 2. Risk Ratio & Penalty Function
+        self.risk_ratio = self.risk_metric / s['lower_ddn_limit']
+        # The x^4 penalty creates an aggressive 'exit' signal
+        self.penalty = (1 / (0.5 + self.risk_ratio) ** 4).clip(upper=1).fillna(1)
+
     def compute_weights(self, tickers_returns):
         """
         Calculates the portfolio weights based on CAGR momentum
@@ -33,16 +45,7 @@ class DDNLimitedPortfolio:
         """
         s = self.settings
 
-        # 1. Risk Prediction (70% DDN Std / 30% Volatility)
-        self.drawdown_df = self._get_drawdown(tickers_returns, s['ddn_w'])
-        risk_ddn = 3 * self.drawdown_df.rolling(s['ddn_std_w']).std()
-        #risk_volat = 3 * tickers_returns.rolling(s['ddn_std_w']).std()
-        self.risk_metric = (risk_ddn * 1)  #+ (risk_volat * 0)
-
-        # 2. Risk Ratio & Penalty Function
-        self.risk_ratio = self.risk_metric / s['lower_ddn_limit']
-        # The x^4 penalty creates an aggressive 'exit' signal
-        self.penalty = (1 / (0.5 + self.risk_ratio) ** 4).clip(upper=1).fillna(1)
+        self.get_ddn_penalty(tickers_returns)
 
         # 3. CAGR Utility (Arithmetic mean based on window)
         cagr = tickers_returns.rolling(s['d_cagr_w']).mean() * 252
@@ -50,26 +53,27 @@ class DDNLimitedPortfolio:
 
         # 4. Apply Penalty to Utility
         # Only penalize assets where the risk ratio > 1.0
-        risk_mask = self.risk_ratio > 1
-        utility_final = self.utility.where(~risk_mask, self.utility * self.penalty)
+        utility_final = self.utility.where(~(self.risk_ratio > 1), self.utility * self.penalty)
 
         # 5. Apply Constraints & Scaling
-        weights = utility_final.copy()
+        weights = utility_final.copy() #Create weights df
 
         # Ticker-specific caps (e.g., Crypto/Risky assets)
         for ticker in s['d_risky_tickers']:
             if ticker in weights.columns:
+                weights[ticker] = weights[ticker] / 2
                 weights[ticker] = weights[ticker].clip(upper=s['d_max_risky_tickers_weight'])
 
         #Cash Bonus
         if 'cash' in weights.columns:
             weights['cash'] = weights['cash']*3
 
-        # Global asset caps and exclusions
+        # Global asset caps
         weights = weights.clip(upper=s['d_max_asset_weight'])
+
+        #Excluded Tickers
         available_excl = [t for t in s['d_excluded_tickers'] if t in weights.columns]
         weights[available_excl] = 0
-
 
         # Apply fix_mult
         self.final_weights = (weights * s['d_fix_mult'])

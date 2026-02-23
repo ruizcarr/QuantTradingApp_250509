@@ -328,7 +328,7 @@ class WalkForwardTraining:
             params_train['vol_factor'] = (vol_lim / (analytics_train[['volatility']]))
 
         else:
-            params_train['vol__factor']  = 1
+            params_train['vol_factor']  = 1
 
 
         for _ in range(2):
@@ -369,7 +369,41 @@ class WalkForwardTraining:
 
         return params
 
+    def DdnAdjuster(self,analytics ,params,do_print=False):
 
+        # Apply vol_factor to adjust Volatility to target
+
+        if 'drawdown' in analytics.columns:
+            ddn_lim = self.settings['lower_ddn_limit']-0.05
+            params['ddn_factor'] = (ddn_lim / (analytics[['drawdown']]))
+
+        else:
+            params['ddn_factor'] = 1
+
+        for _ in range(2):
+
+            #Set First Value Without enough data length to 1
+            #params_train['vol_factor'].iloc[0]=1
+
+            #Limit change of values to delta
+            params['ddn_factor'] = limit_df_values_diff(params['ddn_factor'],delta={'up':0.25,'dn':0.25}) #0.35
+
+            #Set value to 1 when CAGR is Low
+            #cagr_volat_is_low=(analytics['cagr'] )<0.01
+            #params['ddn_factor'][cagr_volat_is_low]=1
+
+        #Limit Upper Limit
+        params['ddn_factor']=params['ddn_factor'].clip(upper=self.settings['vol_factor_max'])
+
+
+        # Save Optimized Params to CSV
+        params.to_csv(self.path_train+'params_train.csv', index=False)
+        self.params_train=params
+
+        if do_print:
+            print('params_train optimized \n', params)
+
+        return params
 
 
     def PostOptimize(self,params_train,analytics_train):
@@ -379,7 +413,9 @@ class WalkForwardTraining:
 
         params_train=self.KellyAdjuster(analytics_train ,params_train,do_print=False)
 
-        params_train['post_factor']=params_train['vol_factor']*params_train['kelly_factor']
+        #params_train = self.DdnAdjuster(analytics_train, params_train, do_print=False)
+
+        params_train['post_factor']=params_train['kelly_factor']*params_train['vol_factor']
 
         # Save Optimized Params to CSV
         params_train.to_csv(self.path_train+'params_train.csv', index=False)
@@ -491,7 +527,7 @@ class WalkForwardTraining:
         This Test is only valid if  settings are fix over the time
         So, if no parameters optimized diferents than post_opt: vol_factor  kelly_factor  post_factor
         """
-        if len(params_train.columns) >4:
+        if len(params_train.columns) >5:
             print(" -------   This Test is only valid if  settings are fix over the time ------- ")
             print("-------   Apply Test over tt_windows with updated slice_settings ------ ")
             self.Test_by_ttwindows(indicators_dict, params_train, do_annalytics=True)
