@@ -77,7 +77,7 @@ class Data:
             raise FileNotFoundError("Offline mode and no saved CSV available")
         """
 
-        print("last data_bundle date after Load",self.data_bundle.index[-1])
+        #print("last data_bundle date after Load",self.data_bundle.index[-1])
 
         # -----------------------------
         # 2️⃣ Sanitize data_bundle

@@ -20,12 +20,12 @@ class BacktestSettings:
 
 
 class BacktestVectorized:
-    """Vectorized implementation of backtest logic."""
+    """Sequential implementation of backtest logic."""
 
     def __init__(self, settings: BacktestSettings):
         self.settings = settings
 
-    def compute_backtest_until_convergence(
+    def compute_backtest_sequential(
             self,
             weights_div_asset_price: pd.DataFrame,
             asset_price: pd.DataFrame,
@@ -34,7 +34,6 @@ class BacktestVectorized:
             lows: pd.DataFrame,
             closes: pd.DataFrame,
             mults: np.ndarray,
-            portfolio_value_usd: pd.Series,
             weights: pd.DataFrame,
             buy_trigger: pd.DataFrame,
             sell_trigger: pd.DataFrame,
@@ -44,317 +43,268 @@ class BacktestVectorized:
             startcash_usd: float,
             startcash: float,
             exposition_lim: float,
-            pos: pd.DataFrame,
-            max_iterations: int = 200,
             max_n_contracts: int = 50,
-            swan_stop_price: pd.DataFrame = None,  # Added this argument
+            swan_stop_price: pd.DataFrame = None,
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
+        """Execute backtest day by day. No circular dependency possible."""
 
-
-        """Execute backtest computation until positions converge or max iterations reached."""
-        # Pre-allocate arrays for all iterations
-        n_rows, n_cols = pos.shape
-        all_positions = np.zeros((max_iterations + 1, n_rows, n_cols), dtype=np.int32)
-
-        # Initialize with starting positions
-        all_positions[0] = pos.values
-
-        # Pre-allocate array for portfolio values
-        all_portfolio_values = np.zeros((max_iterations + 1, len(portfolio_value_usd)), dtype=np.float64)
-        all_portfolio_values[0] = portfolio_value_usd.values
-
-        # Store the log dictionaries - create a list of separate dictionaries
-        all_bt_log_dicts = [{} for _ in range(max_iterations + 1)]
-
-        # Vectorized computation of all iterations
-        for i in range(max_iterations):
-            # Create DataFrame from the current position values
-            current_pos = pd.DataFrame(
-                all_positions[i],
-                index=pos.index,
-                columns=pos.columns
-            )
-
-            # Create Series from the current portfolio values
-            current_portfolio = pd.Series(
-                all_portfolio_values[i],
-                index=portfolio_value_usd.index
-            )
-
-            # Call compute_backtest with current positions and portfolio values
-            new_pos, new_portfolio, bt_log_dict = self.compute_backtest(
-                weights_div_asset_price, asset_price, opens, highs, lows, closes, mults,
-                current_portfolio, weights, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
-                exchange_rate, startcash_usd, startcash, exposition_lim, current_pos,max_n_contracts, swan_stop_price
-            )
-
-            # Store results for this iteration
-            all_positions[i+1] = new_pos.values
-            all_portfolio_values[i+1] = new_portfolio.values
-            all_bt_log_dicts[i+1] = bt_log_dict
-
-            # Check for convergence using vectorized comparison
-            if np.array_equal(all_positions[i+1], all_positions[i]):
-                break
-
-        # Get the final results
-        final_pos = pd.DataFrame(
-            all_positions[i+1],
-            index=pos.index,
-            columns=pos.columns
-        )
-
-        final_portfolio = pd.Series(
-            all_portfolio_values[i+1],
-            index=portfolio_value_usd.index
-        )
-
-        final_bt_log_dict = all_bt_log_dicts[i+1]
-        final_bt_log_dict['n_iter'] = i + 1
-
-        return final_pos, final_portfolio, final_bt_log_dict
-
-    def compute_backtest(
-            self,
-            weights_div_asset_price: pd.DataFrame,
-            asset_price: pd.DataFrame,
-            opens: pd.DataFrame,
-            highs: pd.DataFrame,
-            lows: pd.DataFrame,
-            closes: pd.DataFrame,
-            mults: np.ndarray,
-            portfolio_value_usd: pd.Series,
-            weights: pd.DataFrame,
-            buy_trigger: pd.DataFrame,
-            sell_trigger: pd.DataFrame,
-            sell_stop_price: pd.DataFrame,
-            buy_stop_price: pd.DataFrame,
-            exchange_rate: pd.Series,
-            startcash_usd: float,
-            startcash: float,
-            exposition_lim: float,
-            pos: pd.DataFrame,
-            max_n_contracts: int ,
-            swan_stop_price: pd.DataFrame,
-    ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
-        """Execute backtest computation."""
-        bt_log_dict = {}
-
-        # Calculate positions and sizes
-        prev_pos = pos.shift(1).fillna(0).astype(int)
-
-        # Set Size of Portfolio to Invest
-        portfolio_to_invest = portfolio_value_usd.shift(1).rolling(
-            self.settings.portfolio_window,
-            min_periods=self.settings.min_periods
-        ).min()
-
-        # Compute Target Size of number of contracts
-        target_size_raw = weights_div_asset_price.multiply(portfolio_to_invest, axis=0).fillna(0)
-        target_size_raw[target_size_raw > self.settings.upgrade_threshold] = target_size_raw.clip(lower=1)
-        target_size = round(target_size_raw, 0).astype(int)
-
-        #Long Only
-        target_size=target_size.clip(lower=0)
-
-        #Clip max number of contracts
-        target_size = target_size.clip(upper=max_n_contracts)
-
-        target_trade_size = target_size - prev_pos
-
-        #target_trade_size_pct = target_size/prev_pos - 1
-        #is_half_sell_stop_ongoing = (target_trade_size_pct<-0.5)
-
-
-        # Position Value & Exposition with Target Size
-        target_pos_value = (asset_price * target_size).sum(axis=1)
-        targeted_exposition = target_pos_value / portfolio_to_invest
-        exposition_is_low = pd.DataFrame({col: (targeted_exposition < exposition_lim) for col in weights.columns})
-
-        # Create/Reset Orders dfs
         tickers = weights.columns
         trading_dates = weights.index
-        base_df = pd.DataFrame(columns=tickers, index=trading_dates)
+        n_days = len(trading_dates)
+        n_tickers = len(tickers)
 
-        # Initialize order DataFrames
-        prices = pd.DataFrame(columns=tickers, index=trading_dates, dtype=float)
-        B_S = base_df.copy().fillna('None')
-        exectype = base_df.copy().fillna('None')
-        event = base_df.copy().fillna('None')
-        tickers_df = base_df.copy()
-        tickers_df.loc[:, :] = tickers
+        # Pre-allocate output arrays
+        positions = np.zeros((n_days, n_tickers), dtype=np.int32)
+        portfolio_usd = np.zeros(n_days, dtype=np.float64)
+        portfolio_eur = np.zeros(n_days, dtype=np.float64)
+        daily_ret_usd = np.zeros(n_days, dtype=np.float64)
+        daily_ret_eur = np.zeros(n_days, dtype=np.float64)
+        pos_value_arr = np.zeros(n_days, dtype=np.float64)
+        exposition_arr = np.zeros(n_days, dtype=np.float64)
+        pt_invest_arr = np.zeros(n_days, dtype=np.float64)
 
-        # Process buy orders
-        is_buy = (target_trade_size > 0) & exposition_is_low & buy_trigger
-        B_S.where(~is_buy, 'Buy', inplace=True)
+        # Order/broker log storage
+        order_log = []
+        broker_log = []
 
-        if not self.settings.buy_at_market:
-            exectype.where(~is_buy, 'Stop', inplace=True)
-            buy_stop_price_adj = buy_stop_price.clip(lower=opens, upper=None)
-            prices.where(~is_buy, buy_stop_price_adj, inplace=True)
-        else:
-            exectype.where(~is_buy, 'Market', inplace=True)
+        # Initialise
+        portfolio_usd[0] = startcash_usd
+        portfolio_eur[0] = startcash
 
-        # Process sell orders
-        is_sell = (target_trade_size < 0)
-        #is_swan_active= (prev_pos>0)
-        #is_sell = is_swan_active #Always Black Swan Stop
+        # Fixed-window min tracking
+        window_counter = 0
+        current_window_min = startcash_usd
+        portfolio_to_invest = startcash_usd
 
-        B_S.where(~is_sell, 'Sell', inplace=True)
-        exectype.where(~is_sell, 'Stop', inplace=True)
+        # Convert everything to numpy up front for speed
+        ap = asset_price.values.astype(np.float64)
+        op = opens.values.astype(np.float64)
+        hi = highs.values.astype(np.float64)
+        lo = lows.values.astype(np.float64)
+        cl = closes.values.astype(np.float64)
+        wda = weights_div_asset_price.values.astype(np.float64)
+        bt_arr = buy_trigger.values.astype(bool)
+        bsp_arr = buy_stop_price.values.astype(np.float64)
+        ssp_arr = sell_stop_price.values.astype(np.float64)
+        er_arr = exchange_rate.values.astype(np.float64)
 
-        # We take the best available protection (Max of Technical vs Swan)
-        # This ensures the order is 'placed' at this price
-        #Only apply when not another sell orther for 50% of  previous is active
-        #effective_sell_stop = np.maximum(sell_stop_price, swan_stop_price)
-        #sell_stop_price.where(is_half_sell_stop_ongoing, effective_sell_stop,inplace=True)
+        for day in range(1, n_days):
 
-        sell_stop_price_adj = sell_stop_price.clip(lower=None, upper=opens)
-        prices.where(~is_sell, sell_stop_price_adj, inplace=True)
+            prev_pos = positions[day - 1].copy()
+            prev_port_usd = portfolio_usd[day - 1]
+            prev_port_eur = portfolio_eur[day - 1]
 
-        # Set market order prices
-        prices.where(
-            ~(exectype == 'Market'),
-            opens,
-            inplace=True
-        )
+            # ── Fixed-window portfolio_to_invest ──────────────────────────
+            window_counter += 1
+            current_window_min = min(current_window_min, prev_port_usd)
 
-        # Set events
-        event.where(
-            ~(B_S != 'None'),
-            'Created',
-            inplace=True
-        )
+            if window_counter >= self.settings.portfolio_window:
+                portfolio_to_invest = current_window_min  # min of completed window
+                current_window_min = prev_port_usd  # reset for next window
+                window_counter = 0
 
-        # Create order data dictionary
-        order_data = {
-            'prices': prices,
-            'B_S': B_S,
-            'exectype': exectype,
-            'event': event,
-            'tickers_df': tickers_df,
-            'size': target_trade_size,
-            'pos': prev_pos
+            # Always use min of frozen value AND current window progress AND current portfolio
+            # This catches drawdowns within the current window immediately
+            effective_pti = min(portfolio_to_invest, current_window_min, prev_port_usd)
+            effective_pti = max(effective_pti, 1.0)  # avoid div by zero
+            pt_invest_arr[day] = effective_pti
+
+            # Add right after pt_invest_arr[day] = effective_pti
+            if effective_pti > prev_port_usd * 1.01:
+                print(f"Day {day} ({trading_dates[day].date()}): "
+                      f"effective_pti={effective_pti:,.0f} "
+                      f"prev_port_usd={prev_port_usd:,.0f} "
+                      f"portfolio_to_invest={portfolio_to_invest:,.0f} "
+                      f"current_window_min={current_window_min:,.0f} "
+                      f"window_counter={window_counter}")
+
+            # ── Target size ───────────────────────────────────────────────
+            target_size_raw = wda[day] * effective_pti
+            mask_upgrade = target_size_raw > self.settings.upgrade_threshold
+            target_size_raw = np.where(mask_upgrade,
+                                       np.maximum(target_size_raw, 1.0),
+                                       target_size_raw)
+            target_size = np.round(target_size_raw).astype(np.int32)
+            target_size = np.clip(target_size, 0, max_n_contracts)
+
+            # ── Exposition guard ──────────────────────────────────────────
+            target_pos_value = (ap[day] * target_size).sum()
+            targeted_exposition = target_pos_value / effective_pti
+            exposition_ok = targeted_exposition < exposition_lim
+
+            target_trade = target_size - prev_pos
+
+            # ── Order logic ───────────────────────────────────────────────
+            is_buy = (target_trade > 0) & exposition_ok & bt_arr[day]
+            is_sell = (target_trade < 0)
+
+            if not self.settings.buy_at_market:
+                buy_price = np.clip(bsp_arr[day], op[day], None)
+            else:
+                buy_price = op[day].copy()
+
+            sell_price = np.clip(ssp_arr[day], None, op[day])
+            order_price = np.where(is_buy, buy_price,
+                                   np.where(is_sell, sell_price, 0.0))
+
+            # ── Execution ─────────────────────────────────────────────────
+            in_range = (order_price >= lo[day]) & (order_price <= hi[day])
+            executed = (is_buy | is_sell) & in_range
+
+            exec_size = np.where(executed, target_trade, 0).astype(np.int32)
+            exec_price = np.where(executed, order_price, 0.0)
+
+            # ── Update positions ──────────────────────────────────────────
+            new_pos = prev_pos + exec_size
+            positions[day] = new_pos
+
+            # ── Returns ───────────────────────────────────────────────────
+            price_diff = ap[day] - ap[day - 1]
+            hold_ret_usd = (prev_pos * price_diff ).sum()
+            trade_ret_usd = (exec_size * (cl[day] - exec_price) * mults).sum()
+            cost_usd = np.abs(exec_size).sum() * self.settings.commision
+
+            day_ret_usd = hold_ret_usd + trade_ret_usd - cost_usd
+            day_ret_eur = day_ret_usd * er_arr[day]
+
+            portfolio_usd[day] = prev_port_usd + day_ret_usd
+
+            # Find the exact day it first goes negative
+            if portfolio_usd[day] < 0 and portfolio_usd[day - 1] >= 0:
+                print(f"\n🚨 Portfolio went negative on day {day} ({trading_dates[day].date()})")
+                print(f"   prev_port_usd:  {prev_port_usd:,.0f}")
+                print(f"   hold_ret_usd:   {hold_ret_usd:,.0f}")
+                print(f"   trade_ret_usd:  {trade_ret_usd:,.0f}")
+                print(f"   cost_usd:       {cost_usd:,.0f}")
+                print(f"   day_ret_usd:    {day_ret_usd:,.0f}")
+                print(f"   positions held: {dict(zip(tickers, prev_pos))}")
+                print(f"   exec_sizes:     {dict(zip(tickers, exec_size))}")
+                print(f"   exec_prices:    {dict(zip(tickers, exec_price.round(2)))}")
+                print(f"   asset_prices:   {dict(zip(tickers, ap[day].round(2)))}")
+                print(f"   price_diffs:    {dict(zip(tickers, price_diff.round(2)))}")
+                print(f"   mults:          {dict(zip(tickers, mults))}")
+
+
+            portfolio_eur[day] = prev_port_eur + day_ret_eur
+            daily_ret_usd[day] = day_ret_usd
+            daily_ret_eur[day] = day_ret_eur
+            pos_value_arr[day] = (ap[day] * new_pos).sum()
+            exposition_arr[day] = pos_value_arr[day] / effective_pti
+
+            # ── Order log ─────────────────────────────────────────────────
+            date = trading_dates[day]
+            for t_idx, ticker in enumerate(tickers):
+                if is_buy[t_idx] or is_sell[t_idx]:
+                    bs = 'Buy' if is_buy[t_idx] else 'Sell'
+                    etype = 'Market' if (is_buy[t_idx] and self.settings.buy_at_market) else 'Stop'
+                    o_time = date + pd.Timedelta(seconds=t_idx + 1)
+                    e_time = (o_time + pd.Timedelta(seconds=10)
+                              if etype == 'Market'
+                              else o_time + pd.Timedelta(hours=10))
+
+                    order_log.append({
+                        'date_time': o_time,
+                        'event': 'Created',
+                        'ticker': ticker,
+                        'B_S': bs,
+                        'exectype': etype,
+                        'size': int(target_trade[t_idx]),
+                        'price': round(float(order_price[t_idx]), 3),
+                        'pos': int(prev_pos[t_idx]),
+                        'commision': 0.0,
+                    })
+
+                    if executed[t_idx]:
+                        broker_log.append({
+                            'date_time': e_time,
+                            'event': 'Executed',
+                            'ticker': ticker,
+                            'B_S': bs,
+                            'exectype': etype,
+                            'size': int(exec_size[t_idx]),
+                            'price': round(float(exec_price[t_idx]), 3),
+                            'pos': int(new_pos[t_idx]),
+                            'commision': round(float(np.abs(exec_size[t_idx]) * self.settings.commision), 2),
+                        })
+                    else:
+                        cancel_time = date + pd.Timedelta(hours=23, minutes=59)
+                        broker_log.append({
+                            'date_time': cancel_time,
+                            'event': 'Canceled',
+                            'ticker': ticker,
+                            'B_S': bs,
+                            'exectype': etype,
+                            'size': int(target_trade[t_idx]),
+                            'price': round(float(order_price[t_idx]), 3),
+                            'pos': int(prev_pos[t_idx]),
+                            'commision': 0.0,
+                        })
+
+        # ── Build output DataFrames ───────────────────────────────────────
+        pos_df = pd.DataFrame(positions, index=trading_dates, columns=tickers)
+        port_usd_series = pd.Series(portfolio_usd, index=trading_dates)
+        port_eur_series = pd.Series(portfolio_eur, index=trading_dates)
+        daily_ret_eur_s = pd.Series(daily_ret_eur, index=trading_dates)
+        pos_value_series = pd.Series(pos_value_arr, index=trading_dates)
+        exposition_s = pd.Series(exposition_arr, index=trading_dates)
+        pt_invest_series = pd.Series(pt_invest_arr, index=trading_dates)
+
+        def logs_to_flat_df(log_list):
+            if not log_list:
+                return pd.DataFrame(columns=['date_time', 'event', 'ticker', 'B_S',
+                                             'exectype', 'size', 'price', 'pos', 'commision'])
+            return pd.DataFrame(log_list)
+
+        bt_log_dict = {
+            'pos': pos_df,
+            'portfolio_value': port_usd_series,
+            'portfolio_value_eur': port_eur_series,
+            'dayly_profit_eur': daily_ret_eur_s,
+            'pos_value': pos_value_series,
+            'exposition': exposition_s,
+            'portfolio_to_invest': pt_invest_series,
+            'exchange_rate': exchange_rate,
+            'n_iter': 1,
+            'order_dict': logs_to_flat_df(order_log),
+            'broker_dict': logs_to_flat_df(broker_log),
         }
 
-        # Execute orders
-        prices_in_market = (
-            (order_data['event'] == 'Created') &
-            (order_data['prices'] >= np.array(lows)) &
-            (order_data['prices'] <= np.array(highs))
-        )
+        # Debug ratio check
+        ratio = pt_invest_series / port_usd_series.replace(0, np.nan)
+        print(f"✅ Sequential backtest complete — 1 pass, no iteration needed.")
+        print(f"   portfolio_to_invest/portfolio_value ratio: "
+              f"max={ratio.max():.3f}, mean={ratio.mean():.3f}")
 
-        broker_event = order_data['event'].where(~prices_in_market, 'Executed').copy()
-        broker_event.where(~(broker_event == 'Created'), 'Canceled', inplace=True)
 
-        exec_size = target_trade_size.where((broker_event == 'Executed'), 0).copy()
-        exec_price = order_data['prices'].where((broker_event == 'Executed'), 0).copy()
 
-        # Create order time at start of the day consecutives by ticker
-        secs = np.arange(1, len(tickers) + 1)  # Start from 1, end at length of tickers (inclusive)
-        order_time_dict = {ticker: (trading_dates + pd.Timedelta(seconds=sec)) for sec, ticker in zip(secs, tickers)}
-        order_time = pd.DataFrame(order_time_dict, index=trading_dates)
-        order_time = order_time.where(event == 'Created', np.nan)
+        return pos_df, port_usd_series, bt_log_dict
 
-        # Create execution time with different timing for market, stop, and canceled orders
-        exec_time = order_time + pd.Timedelta(seconds=10)
-        exec_time = exec_time.where(broker_event == 'Executed', np.nan)
+    def _recompute_portfolio_to_invest_series(self, port_usd: pd.Series) -> pd.Series:
+        """Reconstruct the portfolio_to_invest series used during the run."""
+        n = len(port_usd)
+        result = np.zeros(n)
+        window = self.settings.portfolio_window
+        current_min = port_usd.iloc[0]
+        frozen_val = port_usd.iloc[0]
+        counter = 0
 
-        # Different timing for stop orders
-        exec_time_stop = order_time + pd.Timedelta(hours=10)
-        exec_time_stop = exec_time_stop.where(broker_event == 'Executed', np.nan)
-        exec_time = exec_time.where(~(exectype == 'Stop'), exec_time_stop)
+        for i in range(n):
+            current_min = min(current_min, port_usd.iloc[i])
+            effective = min(frozen_val, current_min, port_usd.iloc[i])
+            result[i] = max(effective, 1.0)
+            counter += 1
+            if counter >= window:
+                frozen_val = current_min
+                current_min = port_usd.iloc[i]
+                counter = 0
 
-        # Different timing for canceled orders
-        exec_time_cancel = order_time + pd.Timedelta(hours=23, minutes=59)
-        exec_time = exec_time.where(~(broker_event == 'Canceled'), exec_time_cancel)
+        return pd.Series(result, index=port_usd.index)
 
-        # Calculate trading costs
-        trading_cost = exec_size.abs() * self.settings.commision
-
-        # Update positions
-        is_trading_day = (broker_event == 'Executed')
-        updated_pos = prev_pos.where(~is_trading_day, prev_pos + exec_size).copy()
-
-        execution_data = {
-            'broker_event': broker_event,
-            'exec_size': exec_size,
-            'exec_price': exec_price,
-            'trading_cost': trading_cost,
-            'updated_pos': updated_pos,
-            'exec_time': exec_time
-        }
-
-        # Calculate returns
-        # Calculate holding returns
-        hold_price_diff = asset_price.diff().fillna(0)
-        hold_returns_raw_usd = (prev_pos * hold_price_diff).sum(axis=1)
-
-        # Calculate trading returns
-        trading_price_diff = (closes - exec_price).multiply(mults, axis=1)
-        trading_returns = exec_size * trading_price_diff
-
-        # Calculate total returns
-        daily_returns_usd = (
-            hold_returns_raw_usd +
-            trading_returns.sum(axis=1) -
-            trading_cost.sum(axis=1)
-        )
-        daily_returns_eur = daily_returns_usd * exchange_rate
-
-        # Calculate portfolio values
-        portfolio_value_usd_new = startcash_usd + daily_returns_usd.cumsum()
-        portfolio_value_eur = startcash + daily_returns_eur.cumsum()
-
-        returns_data = {
-            'daily_returns_usd': daily_returns_usd,
-            'daily_returns_eur': daily_returns_eur,
-            'portfolio_value_usd': portfolio_value_usd_new,
-            'portfolio_value_eur': portfolio_value_eur
-        }
-
-        # Create log dictionary
-        bt_log_dict['order_dict'] = {
-            'date_time': order_time,
-            'event': event,
-            'pos': prev_pos,  # Start of Day Position
-            'ticker': tickers_df,
-            'B_S': B_S,
-            'exectype': exectype,
-            'size': target_trade_size,
-            'price': round(prices, 3),
-            'commision': updated_pos * 0,  # Initialize with zeros
-        }
-
-        bt_log_dict['broker_dict'] = {
-            'date_time': exec_time,
-            'event': broker_event,
-            'pos': updated_pos,
-            'ticker': tickers_df,
-            'B_S': B_S,
-            'exectype': exectype,
-            'size': exec_size,
-            'price': round(exec_price.astype(float), 3),
-            'commision': trading_cost,
-        }
-
-        # Add position and portfolio values
-        bt_log_dict['pos'] = updated_pos
-        bt_log_dict['pos_value'] = (asset_price * updated_pos).sum(axis=1)
-        bt_log_dict['portfolio_value'] = portfolio_value_usd_new
-        bt_log_dict['portfolio_value_eur'] = returns_data['portfolio_value_eur']
-        bt_log_dict['dayly_profit_eur'] = returns_data['daily_returns_eur']
-        bt_log_dict['exchange_rate'] = exchange_rate
-        bt_log_dict['exposition'] = bt_log_dict['pos_value'] / portfolio_to_invest
-
-        return (
-            updated_pos,
-            portfolio_value_usd_new,
-            bt_log_dict
-        )
-
-    # The following methods have been inlined into compute_backtest for performance reasons:
-    # _calculate_positions, _generate_orders, _execute_orders, _calculate_returns, _create_log_dict
+    def _build_log_df(self, log_list: list, tickers) -> pd.DataFrame:
+        """Convert list of log dicts into a flat DataFrame."""
+        if not log_list:
+            return pd.DataFrame(columns=['date_time', 'event', 'ticker', 'B_S', 'exectype', 'size', 'price', 'pos', 'commision'])
+        return pd.DataFrame(log_list)
 
 
 def compute_backtest_vectorized(
@@ -362,53 +312,49 @@ def compute_backtest_vectorized(
         settings: Dict,
         data_dict: Dict
 ) -> Tuple[pd.DataFrame, Dict]:
-    """Main entry point for vectorized backtest computation."""
+    """Main entry point for backtest computation."""
 
-    #Get Sanitized Index Data
+    # Get Sanitized Index Data
     positions, data_dict, opens, highs, lows, closes = sanitize_dataset(positions, data_dict)
 
-    # Get settings values from settings
-    mults_array,startcash, exposition_lim, commision, max_n_contracts=get_settings_values(settings,positions.columns)
+    # Get settings values
+    mults_array, startcash, exposition_lim, commision, max_n_contracts = get_settings_values(settings, positions.columns)
 
-    # NEW: Calculate the Black Swan levels
+    # Black Swan levels
     swan_stop_price = compute_black_swan_thresholds(closes, lows)
 
-    # Get Buy/Sell Triggers & Stop Prices
-    buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(positions,opens,closes, lows, highs)
+    # Buy/Sell Triggers & Stop Prices
+    buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(
+        positions, opens, closes, lows, highs
+    )
 
-    # Get historical of Exchange Rate EUR/USD (day after)
+    # Exchange Rate EUR/USD (day after)
     exchange_rate = 1 / closes["EURUSD=X"].shift(1).fillna(method='bfill')
 
     # Set cash start
-    startcash_usd = startcash / exchange_rate.iloc[0]  # USD
+    startcash_usd = startcash / exchange_rate.iloc[0]
 
-    # Initialize Portfolio Value, Positions, orders
-    portfolio_value_usd = pd.Series(startcash_usd, index=positions.index)
-    pos = pd.DataFrame(0, index=positions.index, columns=positions.columns)
-
-    # Out of loop calculations
+    # Out-of-loop calculations
     weights_div_asset_price, asset_price = compute_out_of_backtest_loop(closes, positions, mults_array)
 
-    # Create backtest instance with settings - reuse the same instance
+    # Create backtest instance
     backtest_settings = BacktestSettings(
         upgrade_threshold=settings.get('upgrade_threshold', 0.20),
         commision=commision,
         buy_at_market=settings.get('buy_at_market', False)
     )
-
-    # Create backtest instance only once
     backtest = BacktestVectorized(backtest_settings)
 
-    # Use the compute_backtest_until_convergence method to handle the loop internally
-    pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_until_convergence(
+    # Single sequential pass — no iteration loop needed
+    pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_sequential(
         weights_div_asset_price, asset_price, opens, highs, lows, closes, mults_array,
-        portfolio_value_usd, positions, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
-        exchange_rate, startcash_usd, startcash, exposition_lim, pos,max_n_contracts=max_n_contracts,
-        swan_stop_price=swan_stop_price  # <--- Pass it here
+        positions, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
+        exchange_rate, startcash_usd, startcash, exposition_lim,
+        max_n_contracts=max_n_contracts,
+        swan_stop_price=swan_stop_price,
     )
 
-    # Add Series to dict - optimize by updating directly
-    bt_log_dict['pos'] = pos
+    bt_log_dict['pos']             = pos
     bt_log_dict['portfolio_value'] = portfolio_value_usd
 
     # Get Log History
@@ -416,8 +362,7 @@ def compute_backtest_vectorized(
 
     # Quantstats Report
     if settings.get('qstats', False):
-
-        bt_qstats_report(bt_log_dict, closes,settings['add_days'],exchange_rate)
+        bt_qstats_report(bt_log_dict, closes, settings['add_days'], exchange_rate)
 
     return bt_log_dict, log_history
 
@@ -625,28 +570,31 @@ def create_log_history(bt_log_dict):
     return log_history
 
 
-def get_log_dict_by_ticker_dict(bt_log_dict, tickers):
-    """Convert log dictionary to dictionary of DataFrames by ticker."""
+def get_log_dict_by_ticker_dict(bt_log_dict_entry, tickers):
+    """Convert log entry to dictionary of DataFrames by ticker.
+    Handles both flat DataFrame (sequential) and wide-dict (old vectorized) formats.
+    """
     bt_log_by_ticker_dict = {}
+
+    # ── Flat DataFrame format (new sequential) ──
+    if isinstance(bt_log_dict_entry, pd.DataFrame):
+        for ticker in tickers:
+            ticker_df = bt_log_dict_entry[bt_log_dict_entry['ticker'] == ticker].copy()
+            bt_log_by_ticker_dict[ticker] = ticker_df.reset_index(drop=True)
+        return bt_log_by_ticker_dict
+
+    # ── Wide dict format (old vectorized) ──
     for ticker in tickers:
-        # Save dict values
         df = pd.DataFrame()
-        for key, value in bt_log_dict.items():
+        for key, value in bt_log_dict_entry.items():
             try:
-                if isinstance(value, pd.DataFrame):
-                    if ticker in value.columns:
-                        df[key] = value[ticker]
-                elif isinstance(value, dict):
-                    for dict_key, dict_value in value.items():
-                        if isinstance(dict_value, pd.DataFrame) and ticker in dict_value.columns:
-                            df[dict_key] = dict_value[ticker]
-                        elif isinstance(dict_value, pd.Series):
-                            df[dict_key] = dict_value
+                if isinstance(value, pd.DataFrame) and ticker in value.columns:
+                    df[key] = value[ticker]
+                elif isinstance(value, pd.Series):
+                    df[key] = value
             except Exception as e:
-                # Skip this key if there's an error
                 print(f"Warning: Error processing {key} for ticker {ticker}: {str(e)}")
                 continue
-
         bt_log_by_ticker_dict[ticker] = df
 
     return bt_log_by_ticker_dict
@@ -687,53 +635,58 @@ def compute_black_swan_thresholds(closes, lows):
 
     return swan_stop_price.fillna(0)
 
-def compute_sell_volat_stop_price(closes, lows,delta=2):
-    """
-    Calculates the volatility-based floor for Black volat events.
-    Uses 2-sigma of the (Close - Low) 'downside wicks'.
-    """
-    # Downside noise: difference between close and intraday low
+def compute_sell_volat_stop_price(closes, lows, delta=6):
     downside_noise = (closes.shift(1) - lows).shift(1)
 
-    # 2-sigma buffer based on previous 20 days of downside wicks
-    # Use shift(1) to avoid look-ahead bias
-    volat_buffer =downside_noise.rolling(20).mean() + delta * downside_noise.rolling(20).std()
+    roll_mean = downside_noise.rolling(20, min_periods=1).mean()
+    roll_std  = downside_noise.rolling(20, min_periods=1).std().fillna(0)
 
-    volat_buffer = volat_buffer.clip(lower=0.0001*closes.shift(1), upper=0.12*closes.shift(1))
+    volat_buffer = roll_mean + delta * roll_std
+    volat_buffer = volat_buffer.clip(
+        lower=0.0001 * closes.shift(1),
+        upper=0.12   * closes.shift(1)
+    )
 
-    # The floor level
     volat_stop_price = closes.shift(1) - volat_buffer
+    volat_stop_price = volat_stop_price.rolling(22, min_periods=1).max()
 
-    #Keep higher value
-    volat_stop_price = volat_stop_price.rolling(22).max().fillna(0)
-
-    #keep real value not over open price
-    #volat_stop_price =volat_stop_price.clip(upper=opens)
+    # Fill early zeros with first valid value (backfill)
+    volat_stop_price = volat_stop_price.replace(0, np.nan).bfill().fillna(0)
 
     return volat_stop_price
 
-def compute_buy_volat_stop_price(closes, highs,delta=2):
-    """
-    Calculates the volatility-based floor for volat events.
-    Uses 2-sigma of the (High-Close) 'upside wicks'.
-    """
-    # Upside noise: difference between intraday High and previous close
-    # Use shift(1) to avoid look-ahead bias
-    upside_noise = (highs-closes.shift(1)).shift(1)
 
-    # delta-sigma buffer based on previous 20 days of downside wicks
+def compute_buy_volat_stop_price(closes, highs, delta=1):
+    upside_noise = (highs - closes.shift(1)).shift(1)
 
-    volat_buffer =upside_noise.rolling(20).mean() + delta * upside_noise.rolling(20).std()
+    roll_mean = upside_noise.rolling(20, min_periods=1).mean()
+    roll_std  = upside_noise.rolling(20, min_periods=1).std().fillna(0)
 
-    #volat_buffer = volat_buffer.clip(lower=0.0001*closes.shift(1), upper=0.12*closes.shift(1))
-
-    # The floor level
+    volat_buffer     = roll_mean + delta * roll_std
     volat_stop_price = closes.shift(1) + volat_buffer
+    volat_stop_price = volat_stop_price.rolling(22, min_periods=1).min()
 
-    #Keep lower value
-    volat_stop_price = volat_stop_price.rolling(22).min().fillna(0)
-
-    #keep real value not over open price
-    #volat_stop_price =volat_stop_price.clip(upper=opens)
+    # Fill early zeros with first valid value (backfill)
+    volat_stop_price = volat_stop_price.replace(0, np.nan).bfill().fillna(0)
 
     return volat_stop_price
+
+
+def compute_portfolio_to_invest(portfolio_value_usd, window):
+    shifted = portfolio_value_usd.shift(1)
+    n = len(shifted)
+
+    result = shifted.copy()
+
+    # Before first full window: expanding min (same as before)
+    if n >= window:
+        result.iloc[:window] = shifted.iloc[:window].expanding().min()
+
+        # After first full window: fixed non-overlapping windows
+        for start in range(window, n, window):
+            end = min(start + window, n)
+            # Min of the PREVIOUS window applied to current window
+            prev_window_min = shifted.iloc[start - window:start].min()
+            result.iloc[start:end] = prev_window_min
+
+    return result

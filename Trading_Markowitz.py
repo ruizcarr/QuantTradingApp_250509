@@ -76,10 +76,13 @@ def compute(settings,data_ind):
             print("positions\n", positions.tail(10))
             print("eod_log_history\n", eod_log_history.tail(10))
 
+
             yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
             weekago= pd.Timestamp.today().normalize() - pd.Timedelta(days=7)
             two_weekago = pd.Timestamp.today().normalize() - pd.Timedelta(days=14)
             print("log_history\n", log_history[log_history["date_time"]>=two_weekago].tail(60))
+
+            print("log_history head\n", log_history.head(60))
 
 
             #print("trading_history\n", trading_history.tail(30))
