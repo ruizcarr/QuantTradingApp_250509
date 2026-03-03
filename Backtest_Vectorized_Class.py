@@ -15,7 +15,7 @@ class BacktestSettings:
     upgrade_threshold: float = 0.20
     commision: float = 5.0
     buy_at_market: bool = False
-    portfolio_window: int = 22 * 12
+    portfolio_window: int = 22 * 12 #22 * 12
     min_periods: int = 1
 
 
