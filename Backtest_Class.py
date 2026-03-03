@@ -19,7 +19,7 @@ class BacktestSettings:
     min_periods: int = 1
 
 
-class BacktestVectorized:
+class Backtest:
     """Sequential implementation of backtest logic."""
 
     def __init__(self, settings: BacktestSettings):
@@ -109,15 +109,6 @@ class BacktestVectorized:
             effective_pti = max(effective_pti, 1.0)  # avoid div by zero
             pt_invest_arr[day] = effective_pti
 
-            # Add right after pt_invest_arr[day] = effective_pti
-            if effective_pti > prev_port_usd * 1.01:
-                print(f"Day {day} ({trading_dates[day].date()}): "
-                      f"effective_pti={effective_pti:,.0f} "
-                      f"prev_port_usd={prev_port_usd:,.0f} "
-                      f"portfolio_to_invest={portfolio_to_invest:,.0f} "
-                      f"current_window_min={current_window_min:,.0f} "
-                      f"window_counter={window_counter}")
-
             # ── Target size ───────────────────────────────────────────────
             target_size_raw = wda[day] * effective_pti
             mask_upgrade = target_size_raw > self.settings.upgrade_threshold
@@ -168,23 +159,6 @@ class BacktestVectorized:
             day_ret_eur = day_ret_usd * er_arr[day]
 
             portfolio_usd[day] = prev_port_usd + day_ret_usd
-
-            # Find the exact day it first goes negative
-            if portfolio_usd[day] < 0 and portfolio_usd[day - 1] >= 0:
-                print(f"\n🚨 Portfolio went negative on day {day} ({trading_dates[day].date()})")
-                print(f"   prev_port_usd:  {prev_port_usd:,.0f}")
-                print(f"   hold_ret_usd:   {hold_ret_usd:,.0f}")
-                print(f"   trade_ret_usd:  {trade_ret_usd:,.0f}")
-                print(f"   cost_usd:       {cost_usd:,.0f}")
-                print(f"   day_ret_usd:    {day_ret_usd:,.0f}")
-                print(f"   positions held: {dict(zip(tickers, prev_pos))}")
-                print(f"   exec_sizes:     {dict(zip(tickers, exec_size))}")
-                print(f"   exec_prices:    {dict(zip(tickers, exec_price.round(2)))}")
-                print(f"   asset_prices:   {dict(zip(tickers, ap[day].round(2)))}")
-                print(f"   price_diffs:    {dict(zip(tickers, price_diff.round(2)))}")
-                print(f"   mults:          {dict(zip(tickers, mults))}")
-
-
             portfolio_eur[day] = prev_port_eur + day_ret_eur
             daily_ret_usd[day] = day_ret_usd
             daily_ret_eur[day] = day_ret_eur
@@ -269,42 +243,8 @@ class BacktestVectorized:
             'broker_dict': logs_to_flat_df(broker_log),
         }
 
-        # Debug ratio check
-        ratio = pt_invest_series / port_usd_series.replace(0, np.nan)
-        print(f"✅ Sequential backtest complete — 1 pass, no iteration needed.")
-        print(f"   portfolio_to_invest/portfolio_value ratio: "
-              f"max={ratio.max():.3f}, mean={ratio.mean():.3f}")
-
-
 
         return pos_df, port_usd_series, bt_log_dict
-
-    def _recompute_portfolio_to_invest_series(self, port_usd: pd.Series) -> pd.Series:
-        """Reconstruct the portfolio_to_invest series used during the run."""
-        n = len(port_usd)
-        result = np.zeros(n)
-        window = self.settings.portfolio_window
-        current_min = port_usd.iloc[0]
-        frozen_val = port_usd.iloc[0]
-        counter = 0
-
-        for i in range(n):
-            current_min = min(current_min, port_usd.iloc[i])
-            effective = min(frozen_val, current_min, port_usd.iloc[i])
-            result[i] = max(effective, 1.0)
-            counter += 1
-            if counter >= window:
-                frozen_val = current_min
-                current_min = port_usd.iloc[i]
-                counter = 0
-
-        return pd.Series(result, index=port_usd.index)
-
-    def _build_log_df(self, log_list: list, tickers) -> pd.DataFrame:
-        """Convert list of log dicts into a flat DataFrame."""
-        if not log_list:
-            return pd.DataFrame(columns=['date_time', 'event', 'ticker', 'B_S', 'exectype', 'size', 'price', 'pos', 'commision'])
-        return pd.DataFrame(log_list)
 
 
 def compute_backtest_vectorized(
@@ -321,7 +261,7 @@ def compute_backtest_vectorized(
     mults_array, startcash, exposition_lim, commision, max_n_contracts = get_settings_values(settings, positions.columns)
 
     # Black Swan levels
-    swan_stop_price = compute_black_swan_thresholds(closes, lows)
+    #swan_stop_price = compute_black_swan_thresholds(closes, lows)
 
     # Buy/Sell Triggers & Stop Prices
     buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(
@@ -343,7 +283,7 @@ def compute_backtest_vectorized(
         commision=commision,
         buy_at_market=settings.get('buy_at_market', False)
     )
-    backtest = BacktestVectorized(backtest_settings)
+    backtest = Backtest(backtest_settings)
 
     # Single sequential pass — no iteration loop needed
     pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_sequential(
@@ -351,7 +291,6 @@ def compute_backtest_vectorized(
         positions, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
         exchange_rate, startcash_usd, startcash, exposition_lim,
         max_n_contracts=max_n_contracts,
-        swan_stop_price=swan_stop_price,
     )
 
     bt_log_dict['pos']             = pos
@@ -618,22 +557,7 @@ def bt_qstats_report(bt_log_dict, closes,add_days,exchange_rate):
 
     return q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename
 
-def compute_black_swan_thresholds(closes, lows):
-    """
-    Calculates the volatility-based floor for Black Swan events.
-    Uses 2-sigma of the (Close - Low) 'downside wicks'.
-    """
-    # Downside noise: difference between close and intraday low
-    downside_noise = (closes - lows)
 
-    # 2-sigma buffer based on previous 20 days of downside wicks
-    # Use shift(1) to avoid look-ahead bias
-    swan_buffer = 2 * downside_noise.shift(1).rolling(20).std()
-
-    # The floor level
-    swan_stop_price = closes.shift(1) - swan_buffer
-
-    return swan_stop_price.fillna(0)
 
 def compute_sell_volat_stop_price(closes, lows, delta=6):
     downside_noise = (closes.shift(1) - lows).shift(1)
@@ -671,22 +595,3 @@ def compute_buy_volat_stop_price(closes, highs, delta=1):
 
     return volat_stop_price
 
-
-def compute_portfolio_to_invest(portfolio_value_usd, window):
-    shifted = portfolio_value_usd.shift(1)
-    n = len(shifted)
-
-    result = shifted.copy()
-
-    # Before first full window: expanding min (same as before)
-    if n >= window:
-        result.iloc[:window] = shifted.iloc[:window].expanding().min()
-
-        # After first full window: fixed non-overlapping windows
-        for start in range(window, n, window):
-            end = min(start + window, n)
-            # Min of the PREVIOUS window applied to current window
-            prev_window_min = shifted.iloc[start - window:start].min()
-            result.iloc[start:end] = prev_window_min
-
-    return result

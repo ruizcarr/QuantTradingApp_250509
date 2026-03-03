@@ -389,7 +389,7 @@ def compute_backtest_sequential(
     return bt_log_dict, log_history
 
 
-# Reuse these functions from Backtest_Vectorized_Class.py
+# Reuse these functions from Backtest_Class.py
 def compute_out_of_backtest_loop(closes, weights, mults):
     """Calculate asset prices and weights divided by asset prices."""
     asset_price = closes.multiply(mults, axis=1)  # USD

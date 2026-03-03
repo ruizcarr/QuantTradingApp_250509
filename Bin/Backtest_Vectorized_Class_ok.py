@@ -47,10 +47,10 @@ class BacktestVectorized:
             pos: pd.DataFrame,
             max_iterations: int = 200,
             max_n_contracts: int = 50,
-            swan_stop_price: pd.DataFrame = None,  # Added this argument
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
-        """Execute backtest computation until positions converge or max iterations reached."""
 
+
+        """Execute backtest computation until positions converge or max iterations reached."""
         # Pre-allocate arrays for all iterations
         n_rows, n_cols = pos.shape
         all_positions = np.zeros((max_iterations + 1, n_rows, n_cols), dtype=np.int32)
@@ -62,7 +62,7 @@ class BacktestVectorized:
         all_portfolio_values = np.zeros((max_iterations + 1, len(portfolio_value_usd)), dtype=np.float64)
         all_portfolio_values[0] = portfolio_value_usd.values
 
-        # Store the log dictionaries
+        # Store the log dictionaries - create a list of separate dictionaries
         all_bt_log_dicts = [{} for _ in range(max_iterations + 1)]
 
         # Vectorized computation of all iterations
@@ -80,36 +80,35 @@ class BacktestVectorized:
                 index=portfolio_value_usd.index
             )
 
-            # Call compute_backtest - now passing swan_stop_price forward
+            # Call compute_backtest with current positions and portfolio values
             new_pos, new_portfolio, bt_log_dict = self.compute_backtest(
                 weights_div_asset_price, asset_price, opens, highs, lows, closes, mults,
                 current_portfolio, weights, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
-                exchange_rate, startcash_usd, startcash, exposition_lim, current_pos,
-                max_n_contracts, swan_stop_price
+                exchange_rate, startcash_usd, startcash, exposition_lim, current_pos,max_n_contracts
             )
 
             # Store results for this iteration
-            all_positions[i + 1] = new_pos.values
-            all_portfolio_values[i + 1] = new_portfolio.values
-            all_bt_log_dicts[i + 1] = bt_log_dict
+            all_positions[i+1] = new_pos.values
+            all_portfolio_values[i+1] = new_portfolio.values
+            all_bt_log_dicts[i+1] = bt_log_dict
 
-            # Check for convergence
-            if np.array_equal(all_positions[i + 1], all_positions[i]):
+            # Check for convergence using vectorized comparison
+            if np.array_equal(all_positions[i+1], all_positions[i]):
                 break
 
         # Get the final results
         final_pos = pd.DataFrame(
-            all_positions[i + 1],
+            all_positions[i+1],
             index=pos.index,
             columns=pos.columns
         )
 
         final_portfolio = pd.Series(
-            all_portfolio_values[i + 1],
+            all_portfolio_values[i+1],
             index=portfolio_value_usd.index
         )
 
-        final_bt_log_dict = all_bt_log_dicts[i + 1]
+        final_bt_log_dict = all_bt_log_dicts[i+1]
         final_bt_log_dict['n_iter'] = i + 1
 
         return final_pos, final_portfolio, final_bt_log_dict
@@ -134,121 +133,214 @@ class BacktestVectorized:
             startcash: float,
             exposition_lim: float,
             pos: pd.DataFrame,
-            max_n_contracts: int,
-            swan_stop_price: pd.DataFrame,
+            max_n_contracts: int ,
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
+        """Execute backtest computation."""
         bt_log_dict = {}
-        tickers = weights.columns
-        trading_dates = weights.index
 
-        # 1. Prep Previous Positions and Target Sizes
+        # Calculate positions and sizes
         prev_pos = pos.shift(1).fillna(0).astype(int)
+
+        # Set Size of Portfolio to Invest
         portfolio_to_invest = portfolio_value_usd.shift(1).rolling(
-            self.settings.portfolio_window, min_periods=self.settings.min_periods
+            self.settings.portfolio_window,
+            min_periods=self.settings.min_periods
         ).min()
 
+        # Compute Target Size of number of contracts
         target_size_raw = weights_div_asset_price.multiply(portfolio_to_invest, axis=0).fillna(0)
         target_size_raw[target_size_raw > self.settings.upgrade_threshold] = target_size_raw.clip(lower=1)
-        target_size = round(target_size_raw, 0).astype(int).clip(lower=0, upper=max_n_contracts)
+        target_size = round(target_size_raw, 0).astype(int)
+
+        #Long Only
+        target_size=target_size.clip(lower=0)
+
+        #Clip max number of contracts
+        target_size = target_size.clip(upper=max_n_contracts)
+
         target_trade_size = target_size - prev_pos
 
-        # 2. Define the "Broker" Stop Price
-        # We take the best available protection (Max of Technical vs Swan)
-        # This ensures the order is 'placed' at this price
-        effective_sell_stop = np.maximum(sell_stop_price, swan_stop_price)
-        sell_stop_price_adj = effective_sell_stop.clip(lower=None, upper=opens)
+        # Position Value & Exposition with Target Size
+        target_pos_value = (asset_price * target_size).sum(axis=1)
+        targeted_exposition = target_pos_value / portfolio_to_invest
+        exposition_is_low = pd.DataFrame({col: (targeted_exposition < exposition_lim) for col in weights.columns})
 
-        # 3. Order Creation Logic
-        is_buy = (target_trade_size > 0) & buy_trigger
+        # Create/Reset Orders dfs
+        tickers = weights.columns
+        trading_dates = weights.index
+        base_df = pd.DataFrame(columns=tickers, index=trading_dates)
+
+        # Initialize order DataFrames
+        prices = pd.DataFrame(columns=tickers, index=trading_dates, dtype=float)
+        B_S = base_df.copy().fillna('None')
+        exectype = base_df.copy().fillna('None')
+        event = base_df.copy().fillna('None')
+        tickers_df = base_df.copy()
+        tickers_df.loc[:, :] = tickers
+
+        # Process buy orders
+        is_buy = (target_trade_size > 0) & exposition_is_low & buy_trigger
+        B_S.where(~is_buy, 'Buy', inplace=True)
+
+        if not self.settings.buy_at_market:
+            exectype.where(~is_buy, 'Stop', inplace=True)
+            buy_stop_price_adj = buy_stop_price.clip(lower=opens, upper=None)
+            prices.where(~is_buy, buy_stop_price_adj, inplace=True)
+        else:
+            exectype.where(~is_buy, 'Market', inplace=True)
+
+        # Process sell orders
         is_sell = (target_trade_size < 0)
+        B_S.where(~is_sell, 'Sell', inplace=True)
+        exectype.where(~is_sell, 'Stop', inplace=True)
 
-        # Identify if the execution was driven by the Swan logic for logging
-        # (Swan is the active trigger if it's higher than the technical stop)
-        is_swan_active = (swan_stop_price > sell_stop_price)
+        sell_stop_price_adj = sell_stop_price.clip(lower=None, upper=opens)
+        prices.where(~is_sell, sell_stop_price_adj, inplace=True)
 
-        # Initialize Order Data
-        order_prices = pd.DataFrame(index=trading_dates, columns=tickers, dtype=float)
-        order_type = pd.DataFrame('None', index=trading_dates, columns=tickers)
-        order_side = pd.DataFrame('None', index=trading_dates, columns=tickers)
+        # Set market order prices
+        prices.where(
+            ~(exectype == 'Market'),
+            opens,
+            inplace=True
+        )
 
-        # Fill Buy Orders
-        buy_stop_adj = buy_stop_price.clip(lower=opens, upper=None)
-        order_prices.where(~is_buy, buy_stop_adj, inplace=True)
-        order_side.where(~is_buy, 'Buy', inplace=True)
-        order_type.where(~is_buy, 'Stop', inplace=True)
+        # Set events
+        event.where(
+            ~(B_S != 'None'),
+            'Created',
+            inplace=True
+        )
 
-        # Fill Sell Orders (Using the effective_sell_stop)
-        order_prices.where(~is_sell, sell_stop_price_adj, inplace=True)
-        order_side.where(~is_sell, 'Sell', inplace=True)
-        order_type.where(~is_sell, 'Stop', inplace=True)
-
-        # 4. Execution Engine
-        # Check if price touched the orders
-        in_market = (order_prices >= lows) & (order_prices <= highs)
-        broker_event = pd.DataFrame('None', index=trading_dates, columns=tickers)
-        broker_event = np.where(in_market & (order_side != 'None'), 'Executed', 'Canceled')
-        # Refine Swan Labeling: If it was a sell execution and swan was the tighter stop
-        swan_fill = (broker_event == 'Executed') & (order_side == 'Sell') & is_swan_active
-        broker_event = np.where(swan_fill, 'Swan_Executed', broker_event)
-        broker_event = pd.DataFrame(broker_event, index=trading_dates, columns=tickers)
-        broker_event.where(order_side != 'None', 'None', inplace=True)
-
-        # 5. Determine Execution Size
-        # If Swan_Executed, we force the half-reduction
-        half_reduction = -np.ceil(prev_pos * 0.5).astype(int)
-
-        exec_size = pd.DataFrame(0, index=trading_dates, columns=tickers)
-        # Standard fills (Technical Buys / Technical Sells)
-        standard_fill = (broker_event == 'Executed')
-        exec_size = exec_size.where(~standard_fill, target_trade_size)
-        # Swan fills (Override with half reduction)
-        exec_size = exec_size.where(~swan_fill, half_reduction)
-
-        # Final Cleaning
-        exec_price = order_prices.where(broker_event != 'None', 0)
-        trading_cost = exec_size.abs() * self.settings.commision
-        updated_pos = prev_pos + exec_size
-
-        # 6. Returns Calculation
-        hold_returns = (prev_pos * asset_price.diff().fillna(0)).sum(axis=1)
-        trade_returns = (exec_size * (closes - exec_price).multiply(mults, axis=1)).sum(axis=1)
-        daily_returns_usd = hold_returns + trade_returns - trading_cost.sum(axis=1)
-
-        portfolio_value_usd_new = startcash_usd + daily_returns_usd.cumsum()
-
-        # 7. Update bt_log_dict (Maintaining your log structure)
-        bt_log_dict['order_dict'] = {
-            'date_time': pd.DataFrame({t: trading_dates for t in tickers}, index=trading_dates),
-            'event': pd.DataFrame(np.where(order_side != 'None', 'Created', 'None'), index=trading_dates, columns=tickers),
-            'pos': prev_pos,
-            'ticker': pd.DataFrame({t: [t] * len(trading_dates) for t in tickers}, index=trading_dates),
-            'B_S': order_side,
+        # Create order data dictionary
+        order_data = {
+            'prices': prices,
+            'B_S': B_S,
+            'exectype': exectype,
+            'event': event,
+            'tickers_df': tickers_df,
             'size': target_trade_size,
-            'price': order_prices,
+            'pos': prev_pos
+        }
+
+        # Execute orders
+        prices_in_market = (
+            (order_data['event'] == 'Created') &
+            (order_data['prices'] >= np.array(lows)) &
+            (order_data['prices'] <= np.array(highs))
+        )
+
+        broker_event = order_data['event'].where(~prices_in_market, 'Executed').copy()
+        broker_event.where(~(broker_event == 'Created'), 'Canceled', inplace=True)
+
+        exec_size = target_trade_size.where((broker_event == 'Executed'), 0).copy()
+        exec_price = order_data['prices'].where((broker_event == 'Executed'), 0).copy()
+
+        # Create order time at start of the day consecutives by ticker
+        secs = np.arange(1, len(tickers) + 1)  # Start from 1, end at length of tickers (inclusive)
+        order_time_dict = {ticker: (trading_dates + pd.Timedelta(seconds=sec)) for sec, ticker in zip(secs, tickers)}
+        order_time = pd.DataFrame(order_time_dict, index=trading_dates)
+        order_time = order_time.where(event == 'Created', np.nan)
+
+        # Create execution time with different timing for market, stop, and canceled orders
+        exec_time = order_time + pd.Timedelta(seconds=10)
+        exec_time = exec_time.where(broker_event == 'Executed', np.nan)
+
+        # Different timing for stop orders
+        exec_time_stop = order_time + pd.Timedelta(hours=10)
+        exec_time_stop = exec_time_stop.where(broker_event == 'Executed', np.nan)
+        exec_time = exec_time.where(~(exectype == 'Stop'), exec_time_stop)
+
+        # Different timing for canceled orders
+        exec_time_cancel = order_time + pd.Timedelta(hours=23, minutes=59)
+        exec_time = exec_time.where(~(broker_event == 'Canceled'), exec_time_cancel)
+
+        # Calculate trading costs
+        trading_cost = exec_size.abs() * self.settings.commision
+
+        # Update positions
+        is_trading_day = (broker_event == 'Executed')
+        updated_pos = prev_pos.where(~is_trading_day, prev_pos + exec_size).copy()
+
+        execution_data = {
+            'broker_event': broker_event,
+            'exec_size': exec_size,
+            'exec_price': exec_price,
+            'trading_cost': trading_cost,
+            'updated_pos': updated_pos,
+            'exec_time': exec_time
+        }
+
+        # Calculate returns
+        # Calculate holding returns
+        hold_price_diff = asset_price.diff().fillna(0)
+        hold_returns_raw_usd = (prev_pos * hold_price_diff).sum(axis=1)
+
+        # Calculate trading returns
+        trading_price_diff = (closes - exec_price).multiply(mults, axis=1)
+        trading_returns = exec_size * trading_price_diff
+
+        # Calculate total returns
+        daily_returns_usd = (
+            hold_returns_raw_usd +
+            trading_returns.sum(axis=1) -
+            trading_cost.sum(axis=1)
+        )
+        daily_returns_eur = daily_returns_usd * exchange_rate
+
+        # Calculate portfolio values
+        portfolio_value_usd_new = startcash_usd + daily_returns_usd.cumsum()
+        portfolio_value_eur = startcash + daily_returns_eur.cumsum()
+
+        returns_data = {
+            'daily_returns_usd': daily_returns_usd,
+            'daily_returns_eur': daily_returns_eur,
+            'portfolio_value_usd': portfolio_value_usd_new,
+            'portfolio_value_eur': portfolio_value_eur
+        }
+
+        # Create log dictionary
+        bt_log_dict['order_dict'] = {
+            'date_time': order_time,
+            'event': event,
+            'pos': prev_pos,  # Start of Day Position
+            'ticker': tickers_df,
+            'B_S': B_S,
+            'exectype': exectype,
+            'size': target_trade_size,
+            'price': round(prices, 3),
+            'commision': updated_pos * 0,  # Initialize with zeros
         }
 
         bt_log_dict['broker_dict'] = {
-            'date_time': bt_log_dict['order_dict']['date_time'] + pd.Timedelta(seconds=10),
+            'date_time': exec_time,
             'event': broker_event,
             'pos': updated_pos,
-            'ticker': bt_log_dict['order_dict']['ticker'],
-            'B_S': order_side,
+            'ticker': tickers_df,
+            'B_S': B_S,
+            'exectype': exectype,
             'size': exec_size,
-            'price': exec_price,
+            'price': round(exec_price.astype(float), 3),
             'commision': trading_cost,
         }
 
-        bt_log_dict.update({
-            'pos': updated_pos,
-            'pos_value': (asset_price * updated_pos).sum(axis=1),
-            'portfolio_value': portfolio_value_usd_new,
-            'portfolio_value_eur': startcash + (daily_returns_usd * exchange_rate).cumsum(),
-            'dayly_profit_eur': daily_returns_usd * exchange_rate,
-            'exchange_rate': exchange_rate,
-            'exposition': (asset_price * updated_pos).sum(axis=1) / portfolio_to_invest
-        })
+        # Add position and portfolio values
+        bt_log_dict['pos'] = updated_pos
+        bt_log_dict['pos_value'] = (asset_price * updated_pos).sum(axis=1)
+        bt_log_dict['portfolio_value'] = portfolio_value_usd_new
+        bt_log_dict['portfolio_value_eur'] = returns_data['portfolio_value_eur']
+        bt_log_dict['dayly_profit_eur'] = returns_data['daily_returns_eur']
+        bt_log_dict['exchange_rate'] = exchange_rate
+        bt_log_dict['exposition'] = bt_log_dict['pos_value'] / portfolio_to_invest
 
-        return updated_pos, portfolio_value_usd_new, bt_log_dict
+        return (
+            updated_pos,
+            portfolio_value_usd_new,
+            bt_log_dict
+        )
+
+    # The following methods have been inlined into compute_backtest for performance reasons:
+    # _calculate_positions, _generate_orders, _execute_orders, _calculate_returns, _create_log_dict
+
 
 def compute_backtest_vectorized(
         positions: pd.DataFrame,
@@ -262,9 +354,6 @@ def compute_backtest_vectorized(
 
     # Get settings values from settings
     mults_array,startcash, exposition_lim, commision, max_n_contracts=get_settings_values(settings,positions.columns)
-
-    # NEW: Calculate the Black Swan levels
-    swan_stop_price = compute_black_swan_thresholds(closes, lows)
 
     # Get Buy/Sell Triggers & Stop Prices
     buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(positions,closes, lows, highs)
@@ -296,9 +385,7 @@ def compute_backtest_vectorized(
     pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_until_convergence(
         weights_div_asset_price, asset_price, opens, highs, lows, closes, mults_array,
         portfolio_value_usd, positions, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
-        exchange_rate, startcash_usd, startcash, exposition_lim, pos,
-        max_n_contracts=max_n_contracts,
-        swan_stop_price=swan_stop_price  # <--- Pass it here
+        exchange_rate, startcash_usd, startcash, exposition_lim, pos,max_n_contracts=max_n_contracts
     )
 
     # Add Series to dict - optimize by updating directly
@@ -411,7 +498,7 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
 
     # Get Sell Stop Price
     low_keep = lows_min.rolling(22).max()
-    sell_stop_price = low_keep.fillna(0)
+    sell_stop_price = low_keep
 
     # Get Buy Stop Price
     high_keep = highs_max.rolling(22).min()
@@ -441,66 +528,79 @@ def compute_buy_sell_triggers(weights, closes,lows, highs):
 
 
 def create_log_history(bt_log_dict):
-    """
-    Final optimized version: Flattens trade data, merges daily risk metrics,
-    and ensures all columns required by process_log_data are present.
-    """
+    """Create log history from backtest log dictionary."""
+    # Get Series from dict
+    portfolio_value_eur = bt_log_dict['portfolio_value_eur']
+    pos = bt_log_dict['pos']
 
-    def flatten_dict(d):
-        ticker_df = d['ticker']
-        flattened_rows = []
-        for col in ticker_df.columns:
-            temp_df = pd.DataFrame({
-                'date_time': d['date_time'][col],
-                'ticker': d['ticker'][col],
-                'event': d['event'][col],
-                'B_S': d['B_S'][col],
-                'size': d['size'][col],
-                'price': d['price'][col],
-                'pos': d['pos'][col],
-                'commision': d.get('commision', pd.DataFrame(0, index=ticker_df.index, columns=ticker_df.columns))[col]
-            })
-            flattened_rows.append(temp_df)
-        return pd.concat(flattened_rows).reset_index(drop=True)
+    tickers = pos.columns
 
-    # 1. Flatten Trades
-    order_df = flatten_dict(bt_log_dict['order_dict'])
-    broker_df = flatten_dict(bt_log_dict['broker_dict'])
+    # Get dicts to create log_history
+    order_dict = get_log_dict_by_ticker_dict(bt_log_dict['order_dict'], tickers)
+    broker_dict = get_log_dict_by_ticker_dict(bt_log_dict['broker_dict'], tickers)
 
-    # 2. Build Daily Metrics (EOD)
-    # This includes the metrics that were causing the KeyError
-    eod_df = pd.DataFrame({
-        'date_time': bt_log_dict['portfolio_value'].index + pd.Timedelta(hours=23, minutes=59, seconds=59),
-        'event': 'End of Day',
-        'portfolio_value': bt_log_dict['portfolio_value'].values,
-        'portfolio_value_eur': bt_log_dict['portfolio_value_eur'].values,
-        'dayly_profit_eur': bt_log_dict['dayly_profit_eur'].values,
-        'exchange_rate': bt_log_dict['exchange_rate'].values,
-        'pos_value': bt_log_dict.get('pos_value', pd.Series(0, index=bt_log_dict['portfolio_value'].index)).values,
-        'ddn': bt_log_dict.get('ddn', pd.Series(0, index=bt_log_dict['portfolio_value'].index)).values,
-        'dayly_profit': bt_log_dict.get('dayly_profit', pd.Series(0, index=bt_log_dict['portfolio_value'].index)).values
-    })
+    # Reindex before concatenate
+    order_dict = {ticker: order_dict[ticker].reset_index(drop=True) for ticker in tickers}
+    broker_dict = {ticker: broker_dict[ticker].reset_index(drop=True) for ticker in tickers}
 
-    # 3. Combine and Clean
-    log_history = pd.concat([order_df, broker_df, eod_df], ignore_index=True)
-    log_history = log_history.sort_values(by=['date_time', 'ticker']).reset_index(drop=True)
+    # Concatenate order_dict with broker_dict
+    # Use the same approach as in the original implementation
+    log_history_dict = {ticker: pd.concat([order_dict[ticker], broker_dict[ticker]], axis=0).dropna().sort_values(by='date_time') for ticker in tickers}
 
-    # Filter significant events and remove 'cash' ticker noise
-    mask = (log_history['event'].isin(['Executed', 'Swan_Executed', 'End of Day', 'Created'])) & (log_history['ticker'] != 'cash')
-    log_history = log_history[mask].copy()
+    # Concatenate all tickers
+    log_history = pd.concat(log_history_dict.values(), axis=0).sort_values(by='date_time')
 
-    # 4. Fill Gaps & Add Missing Columns
-    # Forward fill financial totals so trade rows show current portfolio context
-    fill_cols = ['portfolio_value', 'portfolio_value_eur', 'exchange_rate', 'pos_value', 'ddn', 'dayly_profit', 'dayly_profit_eur']
-    log_history[fill_cols] = log_history[fill_cols].ffill().bfill()
+    # Insert tickers as columns
+    log_history[tickers] = np.nan
 
-    # Add 'date' column for drop_duplicates logic
-    log_history['date'] = pd.to_datetime(log_history['date_time']).dt.date
+    # No need to check for date_time column as we've ensured it exists in the previous steps
 
-    # 5. Merge Ticker Positions (ES=F, NQ=F, etc.)
-    tickers = bt_log_dict['pos'].columns.tolist()
-    log_history = log_history.merge(bt_log_dict['pos'], left_on='date_time', right_index=True, how='left', suffixes=('', '_drop'))
-    log_history[tickers] = log_history[tickers].ffill().fillna(0).astype(int)
+    # Insert tickers as columns and reorder exactly as in the original implementation
+    log_history = log_history[['date_time'] + list(tickers) + list(log_history.columns[1:-len(tickers)])]
+
+    # Create End of Day df
+    eod_df = pd.DataFrame(index=pos.index, columns=list(log_history.columns) + ['portfolio_value', 'portfolio_value_eur', 'pos_value', 'ddn', 'dayly_profit', 'dayly_profit_eur', 'pre_portfolio_value', 'exchange_rate', 'ddn_eur'])
+    eod_df['date_time'] = pos.index + pd.Timedelta(days=0, hours=23, minutes=59, seconds=59)
+    eod_df[tickers] = pos
+    eod_df['event'] = 'End of Day'
+
+    # Add Series values from log_dict
+    keys = ['portfolio_value', 'portfolio_value_eur', 'pos_value', 'dayly_profit_eur', 'exchange_rate']
+    for key in keys:
+        eod_df[key] = bt_log_dict[key]
+
+    # Add calculated series
+    eod_df['dayly_profit'] = eod_df['dayly_profit_eur'] / eod_df['exchange_rate']
+    eod_df['pre_portfolio_value'] = eod_df['portfolio_value'].shift(1)
+    eod_df = round(eod_df, 2)
+
+    eod_df['ddn'] = eod_df['portfolio_value'].rolling(252 * 3, min_periods=250).max() / eod_df['portfolio_value'] - 1
+    eod_df['ddn_eur'] = eod_df['portfolio_value_eur'].rolling(252 * 3, min_periods=250).max() / eod_df['portfolio_value_eur'] - 1
+    eod_df[['ddn', 'ddn_eur']] = round(eod_df[['ddn', 'ddn_eur']], 4)
+
+    eod_df = eod_df.reset_index(drop=True)
+
+    # Concatenate log_history with eod_df
+    log_history = pd.concat([log_history, eod_df], axis=0).sort_values(by='date_time')
+
+    # Update tickers positions - do this before renaming events
+    for ticker in tickers:
+        is_executed = log_history['event'] == 'Executed'
+        is_ticker = log_history['ticker'] == ticker
+        log_history.loc[is_executed & is_ticker, ticker] = log_history.loc[is_executed & is_ticker, 'pos']
+
+    log_history[tickers] = log_history[tickers].fillna(method='ffill')
+    log_history[tickers] = log_history[tickers].astype(int)
+
+    # Rename event
+    event_values = ['Sell Order Created', 'Sell Order Canceled', 'Sell Order Executed', 'Buy Order Created', 'Buy Order Canceled', 'Buy Order Executed', 'End of Day']
+
+    # Note: In the original implementation, there's a comment about renaming events,
+    # but no actual code that does it. We're keeping the same behavior here.
+
+    # Keep only date at date_time
+    log_history['date_time'] = pd.to_datetime(log_history['date_time'], errors='coerce')
+    log_history['date'] = log_history['date_time'].dt.date
 
     return log_history
 
@@ -534,7 +634,7 @@ def get_log_dict_by_ticker_dict(bt_log_dict, tickers):
 
 def bt_qstats_report(bt_log_dict, closes,add_days,exchange_rate):
     q_title = 'Cash Backtest Markowitz Vectorized'
-    path = "results\\"
+    path = "../results\\"
     q_filename = os.path.abspath(path + q_title + '.html')
     q_returns = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-add_days]
     q_returns.index = pd.to_datetime(q_returns.index, utc=True).tz_convert(None)
@@ -549,21 +649,3 @@ def bt_qstats_report(bt_log_dict, closes,add_days,exchange_rate):
     webbrowser.open(q_filename)
 
     return q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename
-
-
-def compute_black_swan_thresholds(closes, lows):
-    """
-    Calculates the volatility-based floor for Black Swan events.
-    Uses 2-sigma of the (Close - Low) 'downside wicks'.
-    """
-    # Downside noise: difference between close and intraday low
-    downside_noise = (closes - lows)
-
-    # 2-sigma buffer based on previous 20 days of downside wicks
-    # Use shift(1) to avoid look-ahead bias
-    swan_buffer = 2 * downside_noise.shift(1).rolling(20).std()
-
-    # The floor level
-    swan_stop_price = closes.shift(1) - swan_buffer
-
-    return swan_stop_price.fillna(0)

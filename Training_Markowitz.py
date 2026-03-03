@@ -122,7 +122,7 @@ def run(settings):
     start = time.time()
 
     if settings['do_BT'] :
-        from Backtest_Vectorized_Class import compute_backtest_vectorized
+        from Backtest_Class import compute_backtest_vectorized
         settings['tickers'] = list(positions.columns)
         _, log_history = compute_backtest_vectorized(positions, settings, data.data_dict)
 

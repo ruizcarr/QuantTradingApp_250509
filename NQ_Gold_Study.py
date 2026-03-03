@@ -9,7 +9,7 @@ random.seed(42)
 from Trading_Markowitz import compute, get_trading_positions,process_log_data
 from config.trading_settings import settings
 import Market_Data_Feed as mdf
-from Backtest_Vectorized_Class import compute_backtest_vectorized
+from Backtest_Class import compute_backtest_vectorized
 
 #Main Code
 def main(settings):

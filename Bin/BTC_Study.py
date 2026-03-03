@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # Save to CSV
     def save_to_CSV():
         import os
-        csv_path = os.path.join("datasets", "BTCUSD.csv")
+        csv_path = os.path.join("../datasets", "BTCUSD.csv")
         df.to_csv(csv_path, index=False)
         print(f"Saved BTC data to {csv_path}")
 

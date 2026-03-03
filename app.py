@@ -166,7 +166,7 @@ def main(settings):
         # Show qstats annalitics HTML is a separate page
         #st.checkbox('Show Annalytics:', value=None, key='qstats')
         #if st.session_state.qstats:
-        from Backtest_Vectorized_Class import bt_qstats_report
+        from Backtest_Class import bt_qstats_report
         q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename=bt_qstats_report(bt_log_dict, closes, settings["add_days"], exchange_rate)
 
         import streamlit.components.v1 as components

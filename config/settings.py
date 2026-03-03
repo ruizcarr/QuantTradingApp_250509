@@ -94,11 +94,11 @@ settings={
     'ddn_w': 30, #30 #22
     'ddn_std_w': 10, #10 #22
     'd_cagr_w': 180,  # 180
-    'lower_ddn_limit': 0.15,  #0.14 0.15 # by asset
+    'lower_ddn_limit': 0.14,  #0.14 0.15 # by asset
     'd_max_asset_weight': 0.20,  #0.20 # beffore mult
     'd_risky_tickers': ['BTC-USD'],
     'd_max_risky_tickers_weight': 0.10,
-    'd_excluded_tickers': ['CL=F', 'ES=F','EURUSD=X'],
+    'd_excluded_tickers': [ 'ES=F','CL=F','EURUSD=X'],
     'd_fix_mult': 1.0, #1.6
     'd_max_total_leverage': 1.0,
 

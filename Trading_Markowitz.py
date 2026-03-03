@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 
 
 import Market_Data_Feed as mdf
-from Backtest_Vectorized_Class import compute_backtest_vectorized
+from Backtest_Class import compute_backtest_vectorized
 #from Backtest_Vectorized import compute_backtest_vectorized
 from Training_Markowitz import process_log_data,apply_pos_constrain
 
@@ -82,7 +82,7 @@ def compute(settings,data_ind):
             two_weekago = pd.Timestamp.today().normalize() - pd.Timedelta(days=14)
             print("log_history\n", log_history[log_history["date_time"]>=two_weekago].tail(60))
 
-            print("log_history head\n", log_history.head(60))
+            #print("log_history head\n", log_history.head(60))
 
 
             #print("trading_history\n", trading_history.tail(30))

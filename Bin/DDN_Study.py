@@ -38,7 +38,7 @@ ddn_weights = portfolio_manager.compute_weights(tickers_returns)
 print(ddn_weights)
 
 if settings['do_BT']:
-    from Backtest_Vectorized_Class import compute_backtest_vectorized
+    from Backtest_Class import compute_backtest_vectorized
     from Training_Markowitz import process_log_data
     #positions=ddn_weights.copy()
     #settings['tickers'] = list(positions.columns)
@@ -75,7 +75,7 @@ results['benchmarl'] = cum_rets['ES=F']
 results.plot(title='Results DDN Weights Strategy ')
 
 q_title = 'DDN Strategy Backtest'
-path = "results\\"
+path = "../results\\"
 import os
 q_filename = os.path.abspath(path + q_title + '.html')
 q_returns = ddn_returns['mean']

@@ -677,7 +677,7 @@ def get_log_dict_by_ticker_dict(bt_log_dict, tickers):
 
 def bt_qstats_report(bt_log_dict, closes,add_days,exchange_rate):
     q_title = 'Cash Backtest Markowitz Vectorized'
-    path = "results\\"
+    path = "../results\\"
     q_filename = os.path.abspath(path + q_title + '.html')
     q_returns = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-add_days]
     q_returns.index = pd.to_datetime(q_returns.index, utc=True).tz_convert(None)
