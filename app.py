@@ -64,9 +64,6 @@ def main(settings):
         # Set the page layout to wide
         st.set_page_config(layout="wide", page_title='Quant Trading App')
 
-
-
-
         #Debug
         #st.write("Before Load & Compute: settings end last date", settings["end"])
 
@@ -496,7 +493,7 @@ def display_orders(log_history,settings):
         cols[1].write("No Orders Forecast  in the next days")
 
 # ---------------- Load & Compute ----------------
-@st.cache_resource
+@st.cache_data(ttl=900)
 def load_and_compute_data(settings):
     """
     Fetches raw data and performs computation.
