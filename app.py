@@ -499,10 +499,10 @@ def display_orders(log_history,settings):
 @st.cache_data(ttl=900)
 def load_and_compute_data(**settings_kwargs):
     settings = settings_kwargs
-    """
-    Fetches raw data and performs computation.
-    Always fetches fresh Yahoo data.
-    """
+    #"""
+    #Fetches raw data and performs computation.
+    #Always fetches fresh Yahoo data.
+    #"""
     data_ind = mdf.Data_Ind_Feed(settings).data_ind
     data, _ = data_ind
 
