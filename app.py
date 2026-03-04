@@ -302,7 +302,7 @@ y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
 
     return alt_chart
 
-def display_tickers_data(closes, returns, settings, last_compute_datatime,sidebar=False, daysback=3*22, data_show='returns', chart=True):
+def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22, data_show='returns', chart=True):
     """
     Display market data (closes or returns) for all tickers.
     Always shows today's data based on 'add_days', avoiding system datetime.
