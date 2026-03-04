@@ -63,6 +63,12 @@ def main(settings):
             st.session_state.data_show = 'returns'
         if 'qstats' not in st.session_state:
             st.session_state.qstats = False
+        if "last_refresh" not in st.session_state:
+            st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
+
+        if st.session_state.get("just_refreshed", False):
+            st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
+            st.session_state["just_refreshed"] = False
 
 
 
@@ -360,13 +366,9 @@ def display_tickers_data(closes, returns, settings, last_compute_datatime,sideba
 
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh Data"):
-                #st.cache_data.clear()
-                #st.cache_resource.clear()
                 load_and_compute_data.clear()
-                #datetime_now=pd.Timestamp.now(tz="Europe/Madrid")
-
-                st.session_state["last_refresh"] = last_refresh.strftime('%Y-%m-%d %H:%M')
-                st.rerun() # <--- Force instant rerun
+                st.session_state["just_refreshed"] = True
+                st.rerun()
 
             # Display timestamp
             cols[0].write(
