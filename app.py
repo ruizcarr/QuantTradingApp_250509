@@ -48,6 +48,10 @@ def main(settings):
     #if check_password():
     if True:
 
+        # App Settings
+        # Set the page layout to wide
+        st.set_page_config(layout="wide", page_title='Quant Trading App')
+
         # Initialize session_state values
         chart_len_dict = {'Weekly': 5 + 1, 'Monthly': 22 + 1, 'Quarterly': 3 * 22 + 1}
         if 'chart_len_key' not in st.session_state:
@@ -60,9 +64,7 @@ def main(settings):
         if 'qstats' not in st.session_state:
             st.session_state.qstats = False
 
-        # App Settings
-        # Set the page layout to wide
-        st.set_page_config(layout="wide", page_title='Quant Trading App')
+
 
         #Debug
         #st.write("Before Load & Compute: settings end last date", settings["end"])
