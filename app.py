@@ -76,7 +76,7 @@ def main(settings):
         # ---------------- Main Execution ----------------
 
         # Now load (cached) data
-        data, log_history,bt_log_dict,last_compute_datatime = load_and_compute_data(**local_settings)
+        data, log_history,bt_log_dict = load_and_compute_data(**local_settings)
 
         returns = data.tickers_returns
         closes = data.tickers_closes
@@ -116,7 +116,6 @@ def main(settings):
             closes,
             intraday_tickers_returns, #To avoid yahoo previous day mising data problems
             settings,
-            last_compute_datatime,
             sidebar=False,
             daysback=st.session_state.daysback,
             data_show=st.session_state.data_show,
@@ -320,7 +319,29 @@ def display_tickers_data(closes, returns, settings, last_compute_datatime,sideba
     returns_today = returns.iloc[today_idx]
 
     # Header string: use the index date instead of datetime.now()
-    last_data_date = closes.index[today_idx].tz_localize(tz="Europe/Madrid")#.date()
+    last_data_date = closes.index[today_idx].tz_localize(tz="Europe/Madrid")
+
+    # ADD HERE:
+    today = pd.Timestamp.now(tz="Europe/Madrid").date()
+    days_old = (today - last_data_date.date()).days
+    refresh_time = pd.Timestamp.now(tz="Europe/Madrid").strftime('%H:%M')
+
+    if days_old == 0:
+        staleness = ""
+    elif days_old == 1:
+        staleness = " ⚠️ 1 day old"
+    else:
+        staleness = f" 🔴 {days_old} days old"
+
+    timestamp_str = f"{last_data_date.strftime('%Y-%m-%d')}{staleness} (refreshed at {refresh_time})"
+
+    if "last_refresh" not in st.session_state:
+        st.session_state["last_refresh"] = timestamp_str
+
+    if st.session_state.get("just_refreshed", False):
+        st.session_state["last_refresh"] = timestamp_str
+        st.session_state["just_refreshed"] = False
+
 
     #st.write(market_data_head_1)
     #st.write(closes.tail(6))
@@ -353,18 +374,6 @@ def display_tickers_data(closes, returns, settings, last_compute_datatime,sideba
             cols[0].title("Quant Trading App")
             #cols[0].write(market_data_head_1)
             #cols[0].write(market_data_head_2)
-
-            #Settle last_refresh
-            if last_data_date <= (last_compute_datatime - pd.Timedelta(days=1)):
-                last_refresh = last_data_date + pd.Timedelta(days=0, hours=23, minutes=59)
-            else:
-                last_refresh = last_compute_datatime
-
-
-            # Initialize timestamp on first run
-            if "last_refresh" not in st.session_state:
-                st.session_state["last_refresh"] = last_refresh.strftime('%Y-%m-%d  %H:%M')  #pd.Timestamp.now(tz="Europe/Madrid")
-
 
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh Data"):
@@ -465,9 +474,7 @@ def load_and_compute_data(**settings_kwargs):
 
     log_history, _,bt_log_dict = compute(settings, data_ind)
 
-    last_compute_datatime = pd.Timestamp.now(tz="Europe/Madrid")
-
-    return data, log_history,bt_log_dict,last_compute_datatime
+    return data, log_history,bt_log_dict
 
 
 def compute_qstats(bt_log_dict, closes, add_days, exchange_rate):
