@@ -66,9 +66,7 @@ def main(settings):
         if "last_refresh" not in st.session_state:
             st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
 
-        if st.session_state.get("just_refreshed", False):
-            st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
-            st.session_state["just_refreshed"] = False
+
 
 
 
@@ -108,6 +106,10 @@ def main(settings):
         #Get today
         tz = pytz.timezone('Europe/Madrid')
         today = datetime.datetime.now(tz).date()
+
+        if st.session_state.get("just_refreshed", False):
+            st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
+            st.session_state["just_refreshed"] = False
 
         #Display Title & tickers data
         closes_today=display_tickers_data(
