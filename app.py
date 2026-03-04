@@ -362,8 +362,9 @@ def display_tickers_data(closes, returns, settings, last_compute_datatime,sideba
 
             # ----------------- Refresh Button -----------------
             if cols[0].button("🔄 Refresh Data"):
-                st.cache_data.clear()
-                st.cache_resource.clear()
+                #st.cache_data.clear()
+                #st.cache_resource.clear()
+                load_and_compute_data.clear()
                 #datetime_now=pd.Timestamp.now(tz="Europe/Madrid")
 
                 st.session_state["last_refresh"] = last_refresh.strftime('%Y-%m-%d %H:%M')
