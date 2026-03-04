@@ -70,7 +70,7 @@ def main(settings):
         # ---------------- Main Execution ----------------
 
         # Now load (cached) data
-        data, log_history,bt_log_dict,last_compute_datatime = load_and_compute_data(settings)
+        data, log_history,bt_log_dict,last_compute_datatime = load_and_compute_data(**local_settings)
 
         returns = data.tickers_returns
         closes = data.tickers_closes
@@ -495,7 +495,8 @@ def display_orders(log_history,settings):
 
 # ---------------- Load & Compute ----------------
 @st.cache_data(ttl=900)
-def load_and_compute_data(settings):
+def load_and_compute_data(**settings_kwargs):
+    settings = settings_kwargs
     """
     Fetches raw data and performs computation.
     Always fetches fresh Yahoo data.
