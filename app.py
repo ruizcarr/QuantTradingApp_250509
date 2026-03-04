@@ -631,9 +631,7 @@ def compute_qstats(bt_log_dict, closes, add_days, exchange_rate):
 
 
     except Exception as e:
-        # 4. 'pass' asegura que si algo falla, la aplicación NO se detenga ni se reinicie
-        # Opcional: puedes poner st.warning(f"Error al generar reporte: {e}") si quieres saber qué pasó
-        pass
+        st.warning(f"Analytics report unavailable: {e}")
 
     finally:
         # 5. Limpieza: Intentar borrar el archivo temporal si existe
