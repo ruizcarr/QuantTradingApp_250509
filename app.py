@@ -178,7 +178,8 @@ def main(settings):
 
 #Define Functions
 
-def get_daysback(chart_len_dict):
+def get_daysback():
+    chart_len_dict = {'Weekly': 6, 'Monthly': 23, 'Quarterly': 67}
     st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
 
 def display_portfolio_positions(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,closes_today,today,daysback=3*22+1,forecast=False):
@@ -384,56 +385,6 @@ def display_tickers_data(closes, returns, settings, last_compute_datatime,sideba
 
     return closes_today
 
-
-def display_orders_ok(log_history,settings):
-    def display_orders_log(df, title):
-        #cols[0].write(f"{title}")
-        if len(df) > 0:
-            cols[0].write(f"{title} {df['date'].iloc[0]} 00:00(CET)")
-            for i, row in df.iterrows():
-                order_log = f"**{row['ticker']} {row['exectype']} {row['B_S']}  {row['size']}**"
-                if row['exectype'] == "Stop":
-                    order_log = order_log + f" @ {row['price']}"
-
-                col=df.columns.get_loc(row['ticker'])
-                cols[col].write(order_log)
-
-        else:
-            cols[0].write(f"No {title}")
-
-            for j in range(2):
-                for i in range(1,len(cols)):
-                    cols[i].write(" ")
-
-    st.write(f"**Orders to Broker:**")
-
-    # Columns for dispaly
-    n_col = len(settings["tickers"]) + 1
-    col_width_list = [2] + [1] * (n_col - 1)
-    cols = st.columns(col_width_list)
-
-    # Get Today SELL Stops Log
-    orders_history = log_history[log_history['event'].str.contains('Order Created')]  # [['date','event','ticker','size','price']]
-    today = datetime.date.today()
-    #today = datetime.datetime.strptime('2023-07-20', '%Y-%m-%d').date()
-    today_orders = orders_history.loc[orders_history['date'] == today]
-
-    display_orders_log(today_orders, 'Today Orders')
-
-    #Space
-    for i in range( len(cols)):
-        cols[i].write(f"  ")
-
-    # Get Next days SELL Stops Log
-    orders_ahead = orders_history.loc[orders_history['date'] > today]
-    if len(orders_ahead) > 0:
-        next_day = orders_ahead['date'].iloc[0]
-        next_orders = orders_history.loc[orders_history['date'] == next_day]
-
-        display_orders_log(next_orders, 'Upcoming Orders')
-
-    else:
-        cols[1].write("Not Upcoming Orders shortly")
 
 def display_orders(log_history,settings):
     def display_orders_log(df, title,col=0):
