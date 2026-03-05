@@ -53,7 +53,7 @@ def format_orders_message(log_history, exchange_rate, settings, app_url):
 
     lines = []
     lines.append(f"🔔 <b>Trading Orders Update</b>")
-    lines.append(f"🕒 {today} {now}")
+    lines.append(f"{today} {now}")
     lines.append("")
 
     def format_order_block(orders, title):
@@ -73,7 +73,7 @@ def format_orders_message(log_history, exchange_rate, settings, app_url):
 
     # Today Orders
     today_orders = orders_history[orders_history['date'] == today]
-    format_order_block(today_orders, f"📋 <b>Today Orders</b> \n🕒{today} 00:00")
+    format_order_block(today_orders, f" <b>Today Orders</b> \n🕒{today} 00:00")
 
     lines.append("")
 
@@ -82,9 +82,9 @@ def format_orders_message(log_history, exchange_rate, settings, app_url):
     if len(orders_ahead) > 0:
         next_day = orders_ahead['date'].iloc[0]
         next_orders = orders_ahead[orders_ahead['date'] == next_day]
-        format_order_block(next_orders, f"🔮 <b>Next Orders Forecast</b> \n🕒{next_day} 00:00")
+        format_order_block(next_orders, f" <b>Upcoming Orders</b> \n🕒{next_day} 00:00")
     else:
-        lines.append("🔮 <b>Next Orders Forecast</b>\nNo upcoming orders.")
+        lines.append(" <b>Upcoming Orders</b>\nNo upcoming orders.")
 
     lines.append("")
     lines.append("⚠️ Place orders manually with your broker.")
