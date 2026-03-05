@@ -5,6 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import requests
 import datetime
 import copy
+import pytz
 
 from config.trading_settings import settings
 import Market_Data_Feed as mdf
@@ -92,8 +93,9 @@ def format_orders_message(log_history, exchange_rate, cash_info, settings, app_u
     # Filter out cash from orders
     orders_history = orders_history[orders_history['ticker'] != 'cash']
 
-    today = datetime.date.today()
-    now = datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M")
+
+    tz = pytz.timezone('Europe/Madrid')
+    now = datetime.datetime.now(tz).strftime("%H:%M")
 
     lines = []
     lines.append(f"🔔 <b>Trading Orders Update</b>")
