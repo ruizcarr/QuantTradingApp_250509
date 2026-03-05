@@ -30,52 +30,78 @@ def get_orders(settings):
     data, _ = data_ind
     log_history, _, bt_log_dict = compute(local_settings, data_ind)
 
-    # Process log
-    eod_log_history, trading_history = process_log_data(log_history, local_settings)
+    # Get exchange rate from last available close
+    exchange_rate = data.tickers_closes['EURUSD=X'].iloc[-settings['add_days'] - 1]
 
-    # Get today's orders
-    today = datetime.date.today()
+    return log_history, exchange_rate
+
+
+def calc_eur_amount(row, exchange_rate, settings):
+    """Calculate EUR equivalent amount for an order."""
+    ticker = row['ticker']
+    if ticker == 'cash':
+        return None  # skip cash
+    mult = settings['mults'].get(ticker, 1)
+    price = row['price'] if row['exectype'] == 'Stop' else 0
+    eur_amount = abs(row['size']) * price * mult * exchange_rate
+    return eur_amount
+
+
+def format_orders_message(log_history, exchange_rate, settings, app_url):
     orders_history = log_history[log_history['event'].str.contains('Created')]
+    today = datetime.date.today()
+
+    lines = ["🔔 *Trading Orders Update:*\n"]
+
+    def format_order_block(orders, title):
+        if len(orders) > 0:
+            lines.append(f"📋 *{title}*")
+            for _, row in orders.iterrows():
+                line = f"• *{row['ticker']}* {row['exectype']} {row['B_S']} {row['size']}"
+                if row['exectype'] == "Stop":
+                    line += f" @ {row['price']}"
+                # Add EUR amount
+                eur = calc_eur_amount(row, exchange_rate, settings)
+                if eur is not None:
+                    line += f" | {eur:,.0f}€"
+                lines.append(line)
+        else:
+            lines.append(f"📋 *{title}*\nNo orders.")
+
+    # Today Orders
     today_orders = orders_history[orders_history['date'] == today]
+    format_order_block(today_orders, f"Today Orders {today} 00:00 (CET)")
 
-    return today_orders
+    lines.append("")  # spacer
 
-def format_orders_message(orders):
-    if len(orders) == 0:
-        return None  # No message needed
+    # Next Orders Forecast
+    orders_ahead = orders_history[orders_history['date'] > today]
+    if len(orders_ahead) > 0:
+        next_day = orders_ahead['date'].iloc[0]
+        next_orders = orders_ahead[orders_ahead['date'] == next_day]
+        format_order_block(next_orders, f"Next Orders Forecast {next_day} 00:00 (CET)")
+    else:
+        lines.append("🔮 *Next Orders Forecast*\nNo upcoming orders.")
 
-    lines = ["🔔 *Trading Orders for Today:*\n"]
-    for _, row in orders.iterrows():
-        line = f"• *{row['ticker']}* {row['exectype']} {row['B_S']} {row['size']}"
-        if row['exectype'] == "Stop":
-            line += f" @ {row['price']}"
-        lines.append(line)
-
-    lines.append(f"\n📅 {datetime.date.today()} 22:00 CET")
-    lines.append("⚠️ _Please place orders manually with your broker._")
+    lines.append(f"\n⚠️ _Place orders manually with your broker._")
+    lines.append(f"\n🚀 [Open Trading App]({app_url})")
 
     return "\n".join(lines)
+
 
 def main():
     token = os.environ["TELEGRAM_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
+    app_url = "https://quanttradingapp.streamlit.app"  # ← update if different
 
     print("Fetching orders...")
-    orders = get_orders(settings)
+    log_history, exchange_rate = get_orders(settings)
 
-    message = format_orders_message(orders)
+    message = format_orders_message(log_history, exchange_rate, settings, app_url)
+    print(f"Sending alert:\n{message}")
 
-    if message is None:
-        print("No orders today — sending no alert.")
-        # Optionally notify anyway:
-        send_telegram(token, chat_id, "✅ *No orders today.* Keep current positions.")
+    ok = send_telegram(token, chat_id, message)
+    if ok:
+        print("✅ Telegram alert sent successfully!")
     else:
-        print(f"Sending alert:\n{message}")
-        ok = send_telegram(token, chat_id, message)
-        if ok:
-            print("✅ Telegram alert sent successfully!")
-        else:
-            print("❌ Failed to send Telegram alert.")
-
-if __name__ == "__main__":
-    main()
+        print("❌ Failed to send Telegram alert.")
