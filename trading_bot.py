@@ -57,6 +57,7 @@ def get_orders(settings):
         cash_eur = current_contracts * last_cash_price * cash_mult
 
         # And for previous:
+        cash_eur_change = None  # initialize first
         if current_contracts != previous_contracts:
             prev_cash_eur = previous_contracts * last_cash_price * cash_mult
             cash_eur_change = cash_eur - prev_cash_eur
