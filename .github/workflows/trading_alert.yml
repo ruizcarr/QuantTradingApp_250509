@@ -2,8 +2,8 @@ name: Trading Alert
 
 on:
   schedule:
-    - cron: '0 7 * * 0-4'  # 9:00 CEST (summer UTC+2)
-    - cron: '0 8 * * 0-4'  # 9:00 CET  (winter UTC+1)
+    - cron: '0 7 * * 1-5'  # 9:00 CEST (summer UTC+2)
+    - cron: '0 8 * * 1-5'  # 9:00 CET  (winter UTC+1)
   workflow_dispatch:  # Allow manual trigger for testing
 
 jobs:
