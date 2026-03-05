@@ -506,6 +506,7 @@ def create_log_history(bt_log_dict):
     log_history['date_time'] = pd.to_datetime(log_history['date_time'], errors='coerce')
     log_history['date'] = log_history['date_time'].dt.date
 
+
     return log_history
 
 
