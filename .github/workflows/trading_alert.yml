@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -35,16 +37,16 @@ jobs:
           import datetime, pytz, sys
           force = '${{ github.event.inputs.force_run }}' == 'true'
           if force:
-              print('Force run enabled ✅ skipping time check')
+              print('Force run enabled - skipping time check')
               sys.exit(0)
           tz = pytz.timezone('Europe/Madrid')
           now = datetime.datetime.now(tz)
           print(f'Current Madrid time: {now.strftime(\"%H:%M\")}')
           if now.hour != 9:
-              print('Not 9:00 CET/CEST — skipping.')
+              print('Not 9:00 CET/CEST - skipping.')
               sys.exit(1)
           else:
-              print('Time check passed ✅')
+              print('Time check passed')
           "
 
       - name: Run trading bot
@@ -53,4 +55,4 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python trading_bot.py
+          python trading_bot.py 2>&1
