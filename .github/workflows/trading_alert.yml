@@ -1,0 +1,32 @@
+name: Trading Alert
+
+on:
+  schedule:
+    # 21:00 UTC = 22:00 CET (UTC+1) / 23:00 CEST (UTC+2)
+    # Runs Sunday to Thursday
+    - cron: '0 21 * * 0-4'
+  workflow_dispatch:  # Allow manual trigger for testing
+
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run trading bot
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python trading_bot.py
