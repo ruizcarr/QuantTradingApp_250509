@@ -52,13 +52,13 @@ def get_orders(settings):
         current_contracts = int(eod_today['cash'].iloc[-1])
         previous_contracts = int(eod_today['cash'].iloc[-2])
 
-        # Cash EUR value = contracts * last_cash_price * exchange_rate
-        cash_eur = current_contracts * last_cash_price * exchange_rate
+        # Cash EUR value = contracts * last_cash_price * mult * exchange_rate
+        cash_mult = local_settings['mults'].get('cash', 1)
+        cash_eur = current_contracts * last_cash_price * cash_mult
 
-        # Daily change only if contracts changed
-        cash_eur_change = None
+        # And for previous:
         if current_contracts != previous_contracts:
-            prev_cash_eur = previous_contracts * last_cash_price * exchange_rate
+            prev_cash_eur = previous_contracts * last_cash_price * cash_mult
             cash_eur_change = cash_eur - prev_cash_eur
 
         # Euribor rate
