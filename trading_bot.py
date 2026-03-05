@@ -4,7 +4,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import requests
 import datetime
-import pandas as pd
 import copy
 
 from config.trading_settings import settings
@@ -16,7 +15,8 @@ def send_telegram(token, chat_id, message):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": message
+        "text": message,
+        "parse_mode": "HTML"
     }
     response = requests.post(url, json=payload)
     print(f"Status code: {response.status_code}")
@@ -40,8 +40,6 @@ def get_orders(settings):
 
 def calc_eur_amount(row, exchange_rate, settings):
     ticker = row['ticker']
-    if ticker == 'cash':
-        return None
     mult = settings['mults'].get(ticker, 1)
     price = row['price'] if row['exectype'] == 'Stop' else 0
     eur_amount = abs(row['size']) * price * mult * exchange_rate
@@ -51,25 +49,31 @@ def calc_eur_amount(row, exchange_rate, settings):
 def format_orders_message(log_history, exchange_rate, settings, app_url):
     orders_history = log_history[log_history['event'].str.contains('Created')]
     today = datetime.date.today()
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M")
 
     lines = []
-    lines.append("Trading Orders Update")
+    lines.append(f"🔔 <b>Trading Orders Update</b>")
+    lines.append(f"🕒 {today} {now} UTC")
     lines.append("")
+
+    def format_order_block(orders, title):
+        if len(orders) > 0:
+            lines.append(title)
+            for _, row in orders.iterrows():
+                bs_icon = "🟢" if row['B_S'] == 'Buy' else "🔴"
+                line = f"{bs_icon} <b>{row['ticker']}</b> {row['exectype']} {row['B_S']} {row['size']}"
+                if row['exectype'] == "Stop":
+                    line += f" @ {row['price']}"
+                eur = calc_eur_amount(row, exchange_rate, settings)
+                if eur is not None and eur > 0:
+                    line += f" | {eur:,.0f} EUR"
+                lines.append(line)
+        else:
+            lines.append(f"{title}\nNo orders.")
 
     # Today Orders
     today_orders = orders_history[orders_history['date'] == today]
-    if len(today_orders) > 0:
-        lines.append(f"Today Orders {today} 00:00 CET")
-        for _, row in today_orders.iterrows():
-            line = f"{row['ticker']} {row['exectype']} {row['B_S']} {row['size']}"
-            if row['exectype'] == "Stop":
-                line += f" @ {row['price']}"
-            eur = calc_eur_amount(row, exchange_rate, settings)
-            if eur is not None:
-                line += f" | {eur:,.0f} EUR"
-            lines.append(line)
-    else:
-        lines.append("No orders today.")
+    format_order_block(today_orders, f"📋 <b>Today Orders</b> {today} 00:00")
 
     lines.append("")
 
@@ -78,21 +82,13 @@ def format_orders_message(log_history, exchange_rate, settings, app_url):
     if len(orders_ahead) > 0:
         next_day = orders_ahead['date'].iloc[0]
         next_orders = orders_ahead[orders_ahead['date'] == next_day]
-        lines.append(f"Next Orders Forecast {next_day} 00:00 CET")
-        for _, row in next_orders.iterrows():
-            line = f"{row['ticker']} {row['exectype']} {row['B_S']} {row['size']}"
-            if row['exectype'] == "Stop":
-                line += f" @ {row['price']}"
-            eur = calc_eur_amount(row, exchange_rate, settings)
-            if eur is not None:
-                line += f" | {eur:,.0f} EUR"
-            lines.append(line)
+        format_order_block(next_orders, f"🔮 <b>Next Orders Forecast</b> {next_day} 00:00")
     else:
-        lines.append("No upcoming orders.")
+        lines.append("🔮 <b>Next Orders Forecast</b>\nNo upcoming orders.")
 
     lines.append("")
-    lines.append("Place orders manually with your broker.")
-    lines.append(f"Open Trading App: {app_url}")
+    lines.append("⚠️ Place orders manually with your broker.")
+    lines.append(f"🚀 Open Trading App: {app_url}")
 
     return "\n".join(lines)
 
@@ -115,7 +111,7 @@ def main():
         print(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
-        send_telegram(token, chat_id, f"Trading bot error: {str(e)}")
+        send_telegram(token, chat_id, f"⚠️ Trading bot error: {str(e)}")
         return
 
     ok = send_telegram(token, chat_id, message)
