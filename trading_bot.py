@@ -93,6 +93,7 @@ def format_orders_message(log_history, exchange_rate, cash_info, settings, app_u
     # Filter out cash from orders
     orders_history = orders_history[orders_history['ticker'] != 'cash']
 
+    today = datetime.date.today()
 
     tz = pytz.timezone('Europe/Madrid')
     now = datetime.datetime.now(tz).strftime("%H:%M")
