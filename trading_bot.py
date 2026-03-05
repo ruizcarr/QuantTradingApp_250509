@@ -10,14 +10,23 @@ import datetime
 import pandas as pd
 import copy
 
+
 def send_telegram(token, chat_id, message):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "Markdown"
+        "parse_mode": "HTML"  # ← change from Markdown to HTML
     }
     response = requests.post(url, json=payload)
+    print(f"Status code: {response.status_code}")
+    print(f"Response: {response.text}")
+    return response.ok
+
+    # Add debug output
+    print(f"Status code: {response.status_code}")
+    print(f"Response: {response.text}")
+
     return response.ok
 
 def get_orders(settings):
@@ -51,22 +60,21 @@ def format_orders_message(log_history, exchange_rate, settings, app_url):
     orders_history = log_history[log_history['event'].str.contains('Created')]
     today = datetime.date.today()
 
-    lines = ["🔔 *Trading Orders Update:*\n"]
+    lines = ["🔔 <b>Trading Orders Update:</b>\n"]
 
     def format_order_block(orders, title):
         if len(orders) > 0:
-            lines.append(f"📋 *{title}*")
+            lines.append(f"📋 <b>{title}</b>")
             for _, row in orders.iterrows():
-                line = f"• *{row['ticker']}* {row['exectype']} {row['B_S']} {row['size']}"
+                line = f"• <b>{row['ticker']}</b> {row['exectype']} {row['B_S']} {row['size']}"
                 if row['exectype'] == "Stop":
                     line += f" @ {row['price']}"
-                # Add EUR amount
                 eur = calc_eur_amount(row, exchange_rate, settings)
                 if eur is not None:
                     line += f" | {eur:,.0f}€"
                 lines.append(line)
         else:
-            lines.append(f"📋 *{title}*\nNo orders.")
+            lines.append(f"📋 <b>{title}</b>\nNo orders.")
 
     # Today Orders
     today_orders = orders_history[orders_history['date'] == today]
@@ -81,10 +89,10 @@ def format_orders_message(log_history, exchange_rate, settings, app_url):
         next_orders = orders_ahead[orders_ahead['date'] == next_day]
         format_order_block(next_orders, f"Next Orders Forecast {next_day} 00:00 (CET)")
     else:
-        lines.append("🔮 *Next Orders Forecast*\nNo upcoming orders.")
+        lines.append("🔮 <b>Next Orders Forecast</b>\nNo upcoming orders.")
 
-    lines.append(f"\n⚠️ _Place orders manually with your broker._")
-    lines.append(f"\n🚀 [Open Trading App]({app_url})")
+    lines.append(f"\n⚠️ <i>Place orders manually with your broker.</i>")
+    lines.append(f"\n🚀 <a href='{app_url}'>Open Trading App</a>")
 
     return "\n".join(lines)
 
