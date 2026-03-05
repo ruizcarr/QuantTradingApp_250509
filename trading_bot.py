@@ -83,6 +83,7 @@ def calc_eur_amount(row, exchange_rate, settings):
     mult = settings['mults'].get(ticker, 1)
     price = row['price'] if row['exectype'] == 'Stop' else 0
     eur_amount = abs(row['size']) * price * mult / exchange_rate
+
     return eur_amount
 
 
