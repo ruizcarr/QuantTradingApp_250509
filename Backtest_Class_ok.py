@@ -8,12 +8,6 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# ── Margin Rules ──────────────────────────────────────────────────────────────
-ETF_TICKERS = ['NQ=F', 'ES=F', 'GC=F']
-ETF_CONTRACTS_LIMIT = 2 #2
-MARGIN_RATE = 0.10
-MIN_EURIBOR = 0.001
-
 
 @dataclass
 class BacktestSettings:
@@ -21,7 +15,7 @@ class BacktestSettings:
     upgrade_threshold: float = 0.20
     commision: float = 5.0
     buy_at_market: bool = False
-    portfolio_window: int = 22 * 12
+    portfolio_window: int = 22 * 12 #22 * 12
     min_periods: int = 1
 
 
@@ -49,14 +43,12 @@ class Backtest:
             startcash_usd: float,
             startcash: float,
             exposition_lim: float,
-            euribor: pd.Series,
             max_n_contracts: int = 50,
             swan_stop_price: pd.DataFrame = None,
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
         """Execute backtest day by day. No circular dependency possible."""
 
         tickers = weights.columns
-        tickers_list = list(tickers)
         trading_dates = weights.index
         n_days = len(trading_dates)
         n_tickers = len(tickers)
@@ -70,7 +62,6 @@ class Backtest:
         pos_value_arr = np.zeros(n_days, dtype=np.float64)
         exposition_arr = np.zeros(n_days, dtype=np.float64)
         pt_invest_arr = np.zeros(n_days, dtype=np.float64)
-        cash_eur_arr = np.zeros(n_days, dtype=np.float64)
 
         # Order/broker log storage
         order_log = []
@@ -96,7 +87,6 @@ class Backtest:
         bsp_arr = buy_stop_price.values.astype(np.float64)
         ssp_arr = sell_stop_price.values.astype(np.float64)
         er_arr = exchange_rate.values.astype(np.float64)
-        euribor_arr = euribor.values.astype(np.float64)
 
         for day in range(1, n_days):
 
@@ -109,12 +99,14 @@ class Backtest:
             current_window_min = min(current_window_min, prev_port_usd)
 
             if window_counter >= self.settings.portfolio_window:
-                portfolio_to_invest = current_window_min
-                current_window_min = prev_port_usd
+                portfolio_to_invest = current_window_min  # min of completed window
+                current_window_min = prev_port_usd  # reset for next window
                 window_counter = 0
 
+            # Always use min of frozen value AND current window progress AND current portfolio
+            # This catches drawdowns within the current window immediately
             effective_pti = min(portfolio_to_invest, current_window_min, prev_port_usd)
-            effective_pti = max(effective_pti, 1.0)
+            effective_pti = max(effective_pti, 1.0)  # avoid div by zero
             pt_invest_arr[day] = effective_pti
 
             # ── Target size ───────────────────────────────────────────────
@@ -159,7 +151,7 @@ class Backtest:
 
             # ── Returns ───────────────────────────────────────────────────
             price_diff = ap[day] - ap[day - 1]
-            hold_ret_usd = (prev_pos * price_diff).sum()
+            hold_ret_usd = (prev_pos * price_diff ).sum()
             trade_ret_usd = (exec_size * (cl[day] - exec_price) * mults).sum()
             cost_usd = np.abs(exec_size).sum() * self.settings.commision
 
@@ -173,35 +165,9 @@ class Backtest:
             pos_value_arr[day] = (ap[day] * new_pos).sum()
             exposition_arr[day] = pos_value_arr[day] / effective_pti
 
-            # ── Cash Euribor Return ───────────────────────────────────────
-            blocked_eur = 0.0
-            for t_idx, ticker in enumerate(tickers_list):
-                n_contracts = int(new_pos[t_idx])
-                if n_contracts == 0:
-                    continue
-                notional_eur = ap[day][t_idx] * n_contracts * er_arr[day]
-                if ticker == 'BTC-USD':
-                    blocked_eur += notional_eur
-                elif ticker in ETF_TICKERS:
-                    etf_c = min(n_contracts, ETF_CONTRACTS_LIMIT)
-                    margin_c = max(n_contracts - ETF_CONTRACTS_LIMIT, 0)
-                    etf_notional = etf_c * ap[day][t_idx] * er_arr[day]
-                    margin_notional = margin_c * ap[day][t_idx] * er_arr[day] * MARGIN_RATE
-                    blocked_eur += etf_notional + margin_notional
-                else:
-                    blocked_eur += notional_eur * MARGIN_RATE
-
-
-            free_cash_eur = max(portfolio_eur[day] - blocked_eur, 0.0)  if euribor_arr[day] > MIN_EURIBOR else 0.0
-            cash_return_eur = free_cash_eur * euribor_arr[day] / 255
-
-            portfolio_eur[day] += cash_return_eur
-            daily_ret_eur[day] += cash_return_eur
-            cash_eur_arr[day] = free_cash_eur
-
             # ── Order log ─────────────────────────────────────────────────
             date = trading_dates[day]
-            for t_idx, ticker in enumerate(tickers_list):
+            for t_idx, ticker in enumerate(tickers):
                 if is_buy[t_idx] or is_sell[t_idx]:
                     bs = 'Buy' if is_buy[t_idx] else 'Sell'
                     etype = 'Market' if (is_buy[t_idx] and self.settings.buy_at_market) else 'Stop'
@@ -256,7 +222,6 @@ class Backtest:
         pos_value_series = pd.Series(pos_value_arr, index=trading_dates)
         exposition_s = pd.Series(exposition_arr, index=trading_dates)
         pt_invest_series = pd.Series(pt_invest_arr, index=trading_dates)
-        cash_eur_series = pd.Series(cash_eur_arr, index=trading_dates)
 
         def logs_to_flat_df(log_list):
             if not log_list:
@@ -273,11 +238,11 @@ class Backtest:
             'exposition': exposition_s,
             'portfolio_to_invest': pt_invest_series,
             'exchange_rate': exchange_rate,
-            'cash_eur': cash_eur_series,
             'n_iter': 1,
             'order_dict': logs_to_flat_df(order_log),
             'broker_dict': logs_to_flat_df(broker_log),
         }
+
 
         return pos_df, port_usd_series, bt_log_dict
 
@@ -295,21 +260,12 @@ def compute_backtest_vectorized(
     # Get settings values
     mults_array, startcash, exposition_lim, commision, max_n_contracts = get_settings_values(settings, positions.columns)
 
-    # ── Separate cash from futures ────────────────────────────────────────
-    futures_tickers = [t for t in positions.columns if t != 'cash']
-    positions_futures = positions[futures_tickers]
-    opens_futures     = opens[futures_tickers]
-    highs_futures     = highs[futures_tickers]
-    lows_futures      = lows[futures_tickers]
-    closes_futures    = closes[futures_tickers]
-    mults_array_futures = np.array([
-        settings['mults'][t] if t in settings['mults'] else 1.0
-        for t in futures_tickers
-    ])
+    # Black Swan levels
+    #swan_stop_price = compute_black_swan_thresholds(closes, lows)
 
-    # Buy/Sell Triggers & Stop Prices (futures only)
+    # Buy/Sell Triggers & Stop Prices
     buy_trigger, sell_trigger, sell_stop_price, buy_stop_price = compute_buy_sell_triggers(
-        positions_futures, opens_futures, closes_futures, lows_futures, highs_futures
+        positions, opens, closes, lows, highs
     )
 
     # Exchange Rate EUR/USD (day after)
@@ -318,15 +274,8 @@ def compute_backtest_vectorized(
     # Set cash start
     startcash_usd = startcash / exchange_rate.iloc[0]
 
-    # Euribor series aligned to backtest dates
-    from Market_Data_Feed import get_euribor_1y_daily
-    euribor_df = get_euribor_1y_daily().reindex(closes.index, method="ffill")
-    euribor_series = euribor_df['Euribor'].fillna(0)
-
-    # Out-of-loop calculations (futures only)
-    weights_div_asset_price, asset_price = compute_out_of_backtest_loop(
-        closes_futures, positions_futures, mults_array_futures
-    )
+    # Out-of-loop calculations
+    weights_div_asset_price, asset_price = compute_out_of_backtest_loop(closes, positions, mults_array)
 
     # Create backtest instance
     backtest_settings = BacktestSettings(
@@ -336,23 +285,16 @@ def compute_backtest_vectorized(
     )
     backtest = Backtest(backtest_settings)
 
-    # Single sequential pass — futures only
+    # Single sequential pass — no iteration loop needed
     pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_sequential(
-        weights_div_asset_price, asset_price,
-        opens_futures, highs_futures, lows_futures, closes_futures,
-        mults_array_futures, positions_futures,
-        buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
+        weights_div_asset_price, asset_price, opens, highs, lows, closes, mults_array,
+        positions, buy_trigger, sell_trigger, sell_stop_price, buy_stop_price,
         exchange_rate, startcash_usd, startcash, exposition_lim,
-        euribor=euribor_series,
         max_n_contracts=max_n_contracts,
     )
 
     bt_log_dict['pos']             = pos
     bt_log_dict['portfolio_value'] = portfolio_value_usd
-
-    # Add cash positions back for log history if cash exists
-    if 'cash' in positions.columns:
-        bt_log_dict['pos']['cash'] = positions['cash'].reindex(pos.index).fillna(0).astype(int)
 
     # Get Log History
     log_history = create_log_history(bt_log_dict)
@@ -361,94 +303,129 @@ def compute_backtest_vectorized(
     if settings.get('qstats', False):
         bt_qstats_report(bt_log_dict, closes, settings['add_days'], exchange_rate)
 
-    plot_portfolio_composition(bt_log_dict, closes, exchange_rate, settings)
-
     return bt_log_dict, log_history
 
+def sanitize_dataset(positions,data_dict):
 
-def sanitize_dataset(positions, data_dict):
-
+    # Determine common index between positions and all tickers in data_dict
     common_index = positions.index
     for df in data_dict.values():
         common_index = common_index.intersection(df.index)
 
+    # Reindex positions and all OHLCs to this common index
     positions = positions.reindex(common_index).fillna(0)
 
     for tick, df in data_dict.items():
         data_dict[tick] = df.reindex(common_index).fillna(method='ffill')
 
+    # Get Open, High, Low, Closes from data_dict - optimize by using list comprehension
     desired_order = list(data_dict.keys())
 
-    opens  = pd.concat([data_dict[key]['Open']  for key in desired_order], axis=1, keys=desired_order)
-    highs  = pd.concat([data_dict[key]['High']  for key in desired_order], axis=1, keys=desired_order)
-    lows   = pd.concat([data_dict[key]['Low']   for key in desired_order], axis=1, keys=desired_order)
+    # Optimize by creating DataFrames directly without intermediate dictionary
+    opens = pd.concat([data_dict[key]['Open'] for key in desired_order], axis=1, keys=desired_order)
+    highs = pd.concat([data_dict[key]['High'] for key in desired_order], axis=1, keys=desired_order)
+    lows = pd.concat([data_dict[key]['Low'] for key in desired_order], axis=1, keys=desired_order)
     closes = pd.concat([data_dict[key]['Close'] for key in desired_order], axis=1, keys=desired_order)
 
+    # Start - optimize by using boolean mask directly
     start_mask = (positions > 0).any(axis=1)
     start = positions[start_mask].index[0]
 
+    # Set Start at positions and Tickers Data - optimize by using slicing
     positions = positions.loc[start:]
-    opens     = opens.loc[start:]
-    highs     = highs.loc[start:]
-    lows      = lows.loc[start:]
-    closes    = closes.loc[start:]
+    opens = opens.loc[start:]
+    highs = highs.loc[start:]
+    lows = lows.loc[start:]
+    closes = closes.loc[start:]
 
-    return positions, data_dict, opens, highs, lows, closes
+    return positions, data_dict,opens, highs, lows, closes
 
-
-def get_settings_values(settings, tickers):
+def get_settings_values(settings,tickers):
+    # mult dict to list in the tickers order - optimize by using list comprehension
     mults_array = np.array([
         settings['mults'][tick] if tick in settings['mults']
         else (print(f"ADVERTENCIA: Falta {tick}, usando 1.0") or 1.0)
         for tick in tickers
     ])
-    startcash       = settings['startcash']
-    exposition_lim  = settings['exposition_lim']
-    commision       = settings['commision']
+    startcash = settings['startcash']
+    exposition_lim = settings['exposition_lim']
+    commision = settings['commision']
     max_n_contracts = settings['max_n_contracts']
 
-    return mults_array, startcash, exposition_lim, commision, max_n_contracts
+    return mults_array,startcash, exposition_lim, commision, max_n_contracts
 
 
 def compute_out_of_backtest_loop(closes, weights, mults):
     """Calculate asset prices and weights divided by asset prices."""
-    asset_price = closes.multiply(mults, axis=1)
+    asset_price = closes.multiply(mults, axis=1)  # USD
     yesterday_asset_price = asset_price.shift(1)
     yesterday_asset_price_mean = yesterday_asset_price.rolling(5, min_periods=1).mean()
+    #weights_mean = weights.rolling(5, min_periods=1).mean()
+    #weights_div_asset_price = weights_mean / yesterday_asset_price_mean
     weights_div_asset_price = weights / yesterday_asset_price_mean
 
     return weights_div_asset_price, asset_price
 
 
-def compute_buy_sell_triggers(weights, opens, closes, lows, highs):
+def compute_buy_sell_triggers(weights,opens, closes,lows, highs):
     """Calculate buy/sell triggers and stop prices."""
+    # Weights Uptrend --> weight >= previous 5 days lowest
     weights_min = weights.shift(1).rolling(5).min()
-    weights_up  = weights.ge(weights_min, axis=0)
+    weights_up = weights.ge(weights_min, axis=0)
 
+    # Weights Downtrend --> weight < previous 5 days highest
     weights_max = weights.shift(1).rolling(5).max()
-    weights_dn  = weights.lt(weights_max, axis=0)
+    weights_dn = weights.lt(weights_max, axis=0)
 
-    sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=6)
+    # Lows Uptrend --> Yesterday low > previous 5 days lowest
+    #lows_min = lows.shift(1).rolling(5).min()
+    #lows_up = lows.ge(lows_min, axis=0)
+
+    #Compute Volatility Sell Stop
+    sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=6) #6
+
+    # Lows Uptrend
     lows_up = lows.ge(sell_stop_price, axis=0)
 
+    # Highs Downtrend --> Yesterday high < previous 5 days highest
     highs_max = highs.shift(1).rolling(5).max()
-    highs_dn  = highs.le(highs_max, axis=0)
+    highs_dn = highs.le(highs_max, axis=0)
 
-    buy_trigger  = weights_up & lows_up
-    sell_trigger = highs_dn & weights_dn
+    # Buy Trigger
+    buy_trigger =  weights_up & lows_up
 
+    # Sell Trigger
+    sell_trigger = highs_dn & weights_dn # Highs Downtrend
+
+    # Get Sell Stop Price
+    #sell_stop_price = lows_min.rolling(22).max()
+
+    # Get Buy Stop Price
+    #high_keep = highs_max.rolling(22).min()
+    #highs_std = highs.rolling(22).std().shift(1)
+    #buy_stop_price = high_keep + highs_std * 0.5
+
+    # Compute Volatility Buy Stop
     buy_stop_price = compute_buy_volat_stop_price(closes, highs, delta=1)
 
-    debug = False
+
+    #Debug Plot
+    debug=False
     if debug:
-        plot_df = pd.DataFrame()
-        ticker = 'CL=F'
-        plot_df['high']           = highs[ticker]
-        plot_df['high_max']       = highs_max[ticker]
+        plot_df=pd.DataFrame()
+        ticker='CL=F'
+        plot_df['high']=highs[ticker]
+        plot_df['high_max']=highs_max[ticker]
+        plot_df['lows_min'] = lows_min[ticker]
+        #plot_df['high_keep'] = high_keep[ticker]
         plot_df['buy_stop_price'] = buy_stop_price[ticker]
-        plot_df['weights_up']     = weights_up[ticker]
-        plot_df['buy_trigger']    = buy_trigger[ticker]
+        #plot_df['closes_uptrend'] = closes_uptrend[ticker]
+        plot_df['weights_up'] = weights_up[ticker]
+        plot_df['buy_trigger'] = buy_trigger[ticker]
+
+
         plot_df.tail(200).plot(title=ticker)
+
         print(plot_df[:-4].tail(5))
 
     return buy_trigger, sell_trigger, sell_stop_price, buy_stop_price
@@ -456,78 +433,97 @@ def compute_buy_sell_triggers(weights, opens, closes, lows, highs):
 
 def create_log_history(bt_log_dict):
     """Create log history from backtest log dictionary."""
+    # Get Series from dict
     portfolio_value_eur = bt_log_dict['portfolio_value_eur']
     pos = bt_log_dict['pos']
+
     tickers = pos.columns
 
-    order_dict  = get_log_dict_by_ticker_dict(bt_log_dict['order_dict'], tickers)
+    # Get dicts to create log_history
+    order_dict = get_log_dict_by_ticker_dict(bt_log_dict['order_dict'], tickers)
     broker_dict = get_log_dict_by_ticker_dict(bt_log_dict['broker_dict'], tickers)
 
-    order_dict  = {ticker: order_dict[ticker].reset_index(drop=True)  for ticker in tickers}
+    # Reindex before concatenate
+    order_dict = {ticker: order_dict[ticker].reset_index(drop=True) for ticker in tickers}
     broker_dict = {ticker: broker_dict[ticker].reset_index(drop=True) for ticker in tickers}
 
-    log_history_dict = {
-        ticker: pd.concat([order_dict[ticker], broker_dict[ticker]], axis=0)
-                  .dropna().sort_values(by='date_time')
-        for ticker in tickers
-    }
+    # Concatenate order_dict with broker_dict
+    # Use the same approach as in the original implementation
+    log_history_dict = {ticker: pd.concat([order_dict[ticker], broker_dict[ticker]], axis=0).dropna().sort_values(by='date_time') for ticker in tickers}
 
+    # Concatenate all tickers
     log_history = pd.concat(log_history_dict.values(), axis=0).sort_values(by='date_time')
+
+    # Insert tickers as columns
     log_history[tickers] = np.nan
+
+    # No need to check for date_time column as we've ensured it exists in the previous steps
+
+    # Insert tickers as columns and reorder exactly as in the original implementation
     log_history = log_history[['date_time'] + list(tickers) + list(log_history.columns[1:-len(tickers)])]
 
     # Create End of Day df
-    eod_df = pd.DataFrame(
-        index=pos.index,
-        columns=list(log_history.columns) + [
-            'portfolio_value', 'portfolio_value_eur', 'pos_value',
-            'ddn', 'dayly_profit', 'dayly_profit_eur',
-            'pre_portfolio_value', 'exchange_rate', 'ddn_eur', 'cash_eur'
-        ]
-    )
+    eod_df = pd.DataFrame(index=pos.index, columns=list(log_history.columns) + ['portfolio_value', 'portfolio_value_eur', 'pos_value', 'ddn', 'dayly_profit', 'dayly_profit_eur', 'pre_portfolio_value', 'exchange_rate', 'ddn_eur'])
     eod_df['date_time'] = pos.index + pd.Timedelta(days=0, hours=23, minutes=59, seconds=59)
-    eod_df[tickers]     = pos
-    eod_df['event']     = 'End of Day'
+    eod_df[tickers] = pos
+    eod_df['event'] = 'End of Day'
 
-    keys = ['portfolio_value', 'portfolio_value_eur', 'pos_value',
-            'dayly_profit_eur', 'exchange_rate', 'cash_eur']
+    # Add Series values from log_dict
+    keys = ['portfolio_value', 'portfolio_value_eur', 'pos_value', 'dayly_profit_eur', 'exchange_rate']
     for key in keys:
         eod_df[key] = bt_log_dict[key]
 
-    eod_df['dayly_profit']        = eod_df['dayly_profit_eur'] / eod_df['exchange_rate']
+    # Add calculated series
+    eod_df['dayly_profit'] = eod_df['dayly_profit_eur'] / eod_df['exchange_rate']
     eod_df['pre_portfolio_value'] = eod_df['portfolio_value'].shift(1)
     eod_df = round(eod_df, 2)
 
-    eod_df['ddn']     = eod_df['portfolio_value'].rolling(252 * 3, min_periods=250).max() / eod_df['portfolio_value'] - 1
+    eod_df['ddn'] = eod_df['portfolio_value'].rolling(252 * 3, min_periods=250).max() / eod_df['portfolio_value'] - 1
     eod_df['ddn_eur'] = eod_df['portfolio_value_eur'].rolling(252 * 3, min_periods=250).max() / eod_df['portfolio_value_eur'] - 1
     eod_df[['ddn', 'ddn_eur']] = round(eod_df[['ddn', 'ddn_eur']], 4)
+
     eod_df = eod_df.reset_index(drop=True)
 
+    # Concatenate log_history with eod_df
     log_history = pd.concat([log_history, eod_df], axis=0).sort_values(by='date_time')
 
+    # Update tickers positions - do this before renaming events
     for ticker in tickers:
         is_executed = log_history['event'] == 'Executed'
-        is_ticker   = log_history['ticker'] == ticker
+        is_ticker = log_history['ticker'] == ticker
         log_history.loc[is_executed & is_ticker, ticker] = log_history.loc[is_executed & is_ticker, 'pos']
 
     log_history[tickers] = log_history[tickers].fillna(method='ffill')
     log_history[tickers] = log_history[tickers].fillna(0).astype(int)
 
+    # Rename event
+    event_values = ['Sell Order Created', 'Sell Order Canceled', 'Sell Order Executed', 'Buy Order Created', 'Buy Order Canceled', 'Buy Order Executed', 'End of Day']
+
+    # Note: In the original implementation, there's a comment about renaming events,
+    # but no actual code that does it. We're keeping the same behavior here.
+
+    # Keep only date at date_time
     log_history['date_time'] = pd.to_datetime(log_history['date_time'], errors='coerce')
-    log_history['date']      = log_history['date_time'].dt.date
+    log_history['date'] = log_history['date_time'].dt.date
+
 
     return log_history
 
 
 def get_log_dict_by_ticker_dict(bt_log_dict_entry, tickers):
+    """Convert log entry to dictionary of DataFrames by ticker.
+    Handles both flat DataFrame (sequential) and wide-dict (old vectorized) formats.
+    """
     bt_log_by_ticker_dict = {}
 
+    # ── Flat DataFrame format (new sequential) ──
     if isinstance(bt_log_dict_entry, pd.DataFrame):
         for ticker in tickers:
             ticker_df = bt_log_dict_entry[bt_log_dict_entry['ticker'] == ticker].copy()
             bt_log_by_ticker_dict[ticker] = ticker_df.reset_index(drop=True)
         return bt_log_by_ticker_dict
 
+    # ── Wide dict format (old vectorized) ──
     for ticker in tickers:
         df = pd.DataFrame()
         for key, value in bt_log_dict_entry.items():
@@ -544,11 +540,11 @@ def get_log_dict_by_ticker_dict(bt_log_dict_entry, tickers):
     return bt_log_by_ticker_dict
 
 
-def bt_qstats_report(bt_log_dict, closes, add_days, exchange_rate):
-    q_title    = 'Cash Backtest Markowitz Vectorized'
-    path       = "results\\"
+def bt_qstats_report(bt_log_dict, closes,add_days,exchange_rate):
+    q_title = 'Cash Backtest Markowitz Vectorized'
+    path = "results\\"
     q_filename = os.path.abspath(path + q_title + '.html')
-    q_returns  = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-add_days]
+    q_returns = bt_log_dict['portfolio_value_eur'].pct_change().iloc[:-add_days]
     q_returns.index = pd.to_datetime(q_returns.index, utc=True).tz_convert(None)
 
     q_benchmark_ticker = 'ES=F'
@@ -556,15 +552,12 @@ def bt_qstats_report(bt_log_dict, closes, add_days, exchange_rate):
     q_benchmark.index = pd.to_datetime(q_benchmark.index, utc=True).tz_convert(None)
 
     import quantstats_lumi as quantstats
-    quantstats.reports.html(
-        q_returns, title=q_title,
-        benchmark=q_benchmark, benchmark_title=q_benchmark_ticker,
-        output=q_filename
-    )
+    quantstats.reports.html(q_returns, title=q_title, benchmark=q_benchmark, benchmark_title=q_benchmark_ticker, output=q_filename)
     import webbrowser
     webbrowser.open(q_filename)
 
-    return q_returns, q_title, q_benchmark, q_benchmark_ticker, q_filename
+    return q_returns, q_title, q_benchmark, q_benchmark_ticker,q_filename
+
 
 
 def compute_sell_volat_stop_price(closes, lows, delta=6):
@@ -581,6 +574,8 @@ def compute_sell_volat_stop_price(closes, lows, delta=6):
 
     volat_stop_price = closes.shift(1) - volat_buffer
     volat_stop_price = volat_stop_price.rolling(22, min_periods=1).max()
+
+    # Fill early zeros with first valid value (backfill)
     volat_stop_price = volat_stop_price.replace(0, np.nan).bfill().fillna(0)
 
     return volat_stop_price
@@ -595,129 +590,9 @@ def compute_buy_volat_stop_price(closes, highs, delta=1):
     volat_buffer     = roll_mean + delta * roll_std
     volat_stop_price = closes.shift(1) + volat_buffer
     volat_stop_price = volat_stop_price.rolling(22, min_periods=1).min()
+
+    # Fill early zeros with first valid value (backfill)
     volat_stop_price = volat_stop_price.replace(0, np.nan).bfill().fillna(0)
 
     return volat_stop_price
-
-def plot_portfolio_composition(bt_log_dict, closes, exchange_rate, settings):
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-
-    # Get EOD positions and portfolio value
-    pos = bt_log_dict['pos']
-    portfolio_eur = bt_log_dict['portfolio_value_eur']
-    cash_eur = bt_log_dict['cash_eur']
-    er = bt_log_dict['exchange_rate']
-
-    futures_tickers = [t for t in pos.columns if t != 'cash']
-
-    # Compute EUR value per ticker over time
-    ticker_eur = pd.DataFrame(index=pos.index)
-    for ticker in futures_tickers:
-        if ticker in closes.columns and ticker in settings['mults']:
-            mult = settings['mults'][ticker]
-            ticker_eur[ticker] = pos[ticker] * closes[ticker] * mult * er
-
-    ticker_eur = ticker_eur.clip(lower=0)
-    ticker_eur['cash'] = cash_eur.reindex(ticker_eur.index).fillna(0)
-    ticker_eur = ticker_eur.reindex(portfolio_eur.index).fillna(0)
-
-    # Compute blocked_eur over time
-    blocked_eur = pd.Series(0.0, index=pos.index)
-    for ticker in futures_tickers:
-        if ticker not in closes.columns or ticker not in settings['mults']:
-            continue
-        mult = settings['mults'][ticker]
-        n_contracts = pos[ticker]
-        notional_eur = n_contracts * closes[ticker] * mult * er
-
-        if ticker == 'BTC-USD':
-            blocked_eur += notional_eur
-        elif ticker in ETF_TICKERS:
-            etf_c = n_contracts.clip(upper=ETF_CONTRACTS_LIMIT)
-            margin_c = (n_contracts - ETF_CONTRACTS_LIMIT).clip(lower=0)
-            blocked_eur += (etf_c * closes[ticker] * mult * er) + \
-                           (margin_c * closes[ticker] * mult * er * MARGIN_RATE)
-        else:
-            blocked_eur += notional_eur * MARGIN_RATE
-
-    # Euribor
-    from Market_Data_Feed import get_euribor_1y_daily
-    euribor_df = get_euribor_1y_daily().reindex(pos.index, method="ffill")
-    euribor = euribor_df['Euribor'].fillna(0)
-
-    # Plot
-    fig, axes = plt.subplots(4, 1, figsize=(16, 16), sharex=True)
-
-    # ── Chart 1: Stacked area - portfolio composition ──
-    ax1 = axes[0]
-    colors = plt.cm.tab10.colors
-    labels = list(ticker_eur.columns)
-    ax1.stackplot(
-        ticker_eur.index,
-        [ticker_eur[col] for col in labels],
-        labels=labels,
-        colors=colors[:len(labels)],
-        alpha=0.7
-    )
-    ax1.plot(portfolio_eur.index, portfolio_eur.values, 'k-', linewidth=1.5, label='Portfolio Total')
-    ax1.set_title('Portfolio Composition (EUR)', fontsize=12)
-    ax1.set_ylabel('EUR')
-    ax1.legend(loc='upper left', fontsize=8)
-    ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:,.0f}€'))
-
-    # ── Chart 2: Blocked EUR vs Portfolio EUR ──
-    ax2 = axes[1]
-    ax2.plot(portfolio_eur.index, portfolio_eur.values, 'b-', linewidth=1.5, label='Portfolio EUR')
-    ax2.plot(blocked_eur.index, blocked_eur.values, 'r-', linewidth=1.5, label='Blocked EUR')
-    ax2.fill_between(blocked_eur.index, blocked_eur.values, alpha=0.2, color='red')
-    ax2.set_title('Blocked EUR vs Portfolio EUR', fontsize=12)
-    ax2.set_ylabel('EUR')
-    ax2.legend(loc='upper left', fontsize=8)
-    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:,.0f}€'))
-
-    # ── Chart 3: Cash % of portfolio ──
-    ax3 = axes[2]
-    cash_pct = (bt_log_dict['cash_eur'].reindex(portfolio_eur.index).fillna(0) / portfolio_eur * 100).fillna(0)
-    ax3.fill_between(cash_pct.index, cash_pct.values, alpha=0.5, color='green', label='Cash %')
-    ax3.plot(cash_pct.index, cash_pct.values, 'g-', linewidth=1)
-    ax3.axhline(y=0, color='red', linestyle='--', linewidth=0.8)
-    ax3.set_title('Cash % of Portfolio', fontsize=12)
-    ax3.set_ylabel('%')
-    ax3.legend(loc='upper left', fontsize=8)
-
-    # ── Chart 4: Euribor ──
-    ax4 = axes[3]
-    ax4.plot(euribor.index, euribor.values * 100, 'purple', linewidth=1.5, label='Euribor 1Y')
-    ax4.fill_between(euribor.index, euribor.values * 100, alpha=0.2, color='purple')
-    ax4.axhline(y=0.1, color='red', linestyle='--', linewidth=0.8, label='Min threshold')
-    ax4.set_title('Euribor 1Y (%)', fontsize=12)
-    ax4.set_ylabel('%')
-    ax4.legend(loc='upper left', fontsize=8)
-    ax4.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-    ax4.xaxis.set_major_locator(mdates.YearLocator())
-
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    # Check 2005-01-03 specifically
-    check_date = '2005-01-03'
-    d = pd.Timestamp(check_date)
-    idx = pos.index.get_indexer([d], method='ffill')[0]
-
-    print(f"\n--- {check_date} ---")
-    print(f"Portfolio EUR: {portfolio_eur.iloc[idx]:,.0f}€")
-    print(f"ER: {er.iloc[idx]:.4f}")
-    for ticker in futures_tickers:
-        if ticker in closes.columns:
-            n = int(pos[ticker].iloc[idx])
-            price = closes[ticker].iloc[idx]
-            mult = settings['mults'].get(ticker, 1)
-            ap_price = price * mult
-            notional = n * ap_price * er.iloc[idx]
-            print(f"  {ticker}: {n} contracts | price={price:.2f} | mult={mult} | ap={ap_price:.2f} | notional={notional:,.0f}€")
-
-
-
-
 

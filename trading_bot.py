@@ -208,8 +208,8 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
             change_icon = "📈" if cash_info['eur_change'] > 0 else "📉"
             lines.append(f"   {change_icon} Change: {cash_info['eur_change']:+,.0f} EUR ({cash_info['previous_contracts']} → {cash_info['current_contracts']} units)")
 
-    lines.append("")
-    lines.append("⚠️ Place orders manually with your broker.")
+    #lines.append("")
+    #lines.append("⚠️ Place orders manually with your broker.")
 
     # Positions section
     if positions_info:

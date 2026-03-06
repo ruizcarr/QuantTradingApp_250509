@@ -91,6 +91,9 @@ def compute(settings,data_ind):
     if verbose:
         print('\nTrading timeTaken:', end_time - start_time)
 
+
+
+
         plot_len=250
         positions.tail(plot_len).plot(title='Positions')
         eod_log_history[settings['tickers']].tail(plot_len).plot(title='Contracts')

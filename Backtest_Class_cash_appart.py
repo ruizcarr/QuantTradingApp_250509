@@ -179,21 +179,23 @@ class Backtest:
                 n_contracts = int(new_pos[t_idx])
                 if n_contracts == 0:
                     continue
-                notional_eur = ap[day][t_idx] * n_contracts * er_arr[day]
+                notional_eur = ap[day][t_idx] * n_contracts * mults[t_idx] * er_arr[day]
                 if ticker == 'BTC-USD':
                     blocked_eur += notional_eur
                 elif ticker in ETF_TICKERS:
                     etf_c = min(n_contracts, ETF_CONTRACTS_LIMIT)
                     margin_c = max(n_contracts - ETF_CONTRACTS_LIMIT, 0)
-                    etf_notional = etf_c * ap[day][t_idx] * er_arr[day]
-                    margin_notional = margin_c * ap[day][t_idx] * er_arr[day] * MARGIN_RATE
+                    etf_notional = etf_c * ap[day][t_idx] * mults[t_idx] * er_arr[day]
+                    margin_notional = margin_c * ap[day][t_idx] * mults[t_idx] * er_arr[day] * MARGIN_RATE
                     blocked_eur += etf_notional + margin_notional
                 else:
                     blocked_eur += notional_eur * MARGIN_RATE
 
-
-            free_cash_eur = max(portfolio_eur[day] - blocked_eur, 0.0)  if euribor_arr[day] > MIN_EURIBOR else 0.0
-            cash_return_eur = free_cash_eur * euribor_arr[day] / 255
+            free_cash_eur = max(portfolio_eur[day] - blocked_eur, 0.0)
+            if euribor_arr[day] > MIN_EURIBOR:
+                cash_return_eur = free_cash_eur * euribor_arr[day] / 255
+            else:
+                cash_return_eur = 0.0
 
             portfolio_eur[day] += cash_return_eur
             daily_ret_eur[day] += cash_return_eur
@@ -360,8 +362,6 @@ def compute_backtest_vectorized(
     # Quantstats Report
     if settings.get('qstats', False):
         bt_qstats_report(bt_log_dict, closes, settings['add_days'], exchange_rate)
-
-    plot_portfolio_composition(bt_log_dict, closes, exchange_rate, settings)
 
     return bt_log_dict, log_history
 
@@ -598,126 +598,4 @@ def compute_buy_volat_stop_price(closes, highs, delta=1):
     volat_stop_price = volat_stop_price.replace(0, np.nan).bfill().fillna(0)
 
     return volat_stop_price
-
-def plot_portfolio_composition(bt_log_dict, closes, exchange_rate, settings):
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-
-    # Get EOD positions and portfolio value
-    pos = bt_log_dict['pos']
-    portfolio_eur = bt_log_dict['portfolio_value_eur']
-    cash_eur = bt_log_dict['cash_eur']
-    er = bt_log_dict['exchange_rate']
-
-    futures_tickers = [t for t in pos.columns if t != 'cash']
-
-    # Compute EUR value per ticker over time
-    ticker_eur = pd.DataFrame(index=pos.index)
-    for ticker in futures_tickers:
-        if ticker in closes.columns and ticker in settings['mults']:
-            mult = settings['mults'][ticker]
-            ticker_eur[ticker] = pos[ticker] * closes[ticker] * mult * er
-
-    ticker_eur = ticker_eur.clip(lower=0)
-    ticker_eur['cash'] = cash_eur.reindex(ticker_eur.index).fillna(0)
-    ticker_eur = ticker_eur.reindex(portfolio_eur.index).fillna(0)
-
-    # Compute blocked_eur over time
-    blocked_eur = pd.Series(0.0, index=pos.index)
-    for ticker in futures_tickers:
-        if ticker not in closes.columns or ticker not in settings['mults']:
-            continue
-        mult = settings['mults'][ticker]
-        n_contracts = pos[ticker]
-        notional_eur = n_contracts * closes[ticker] * mult * er
-
-        if ticker == 'BTC-USD':
-            blocked_eur += notional_eur
-        elif ticker in ETF_TICKERS:
-            etf_c = n_contracts.clip(upper=ETF_CONTRACTS_LIMIT)
-            margin_c = (n_contracts - ETF_CONTRACTS_LIMIT).clip(lower=0)
-            blocked_eur += (etf_c * closes[ticker] * mult * er) + \
-                           (margin_c * closes[ticker] * mult * er * MARGIN_RATE)
-        else:
-            blocked_eur += notional_eur * MARGIN_RATE
-
-    # Euribor
-    from Market_Data_Feed import get_euribor_1y_daily
-    euribor_df = get_euribor_1y_daily().reindex(pos.index, method="ffill")
-    euribor = euribor_df['Euribor'].fillna(0)
-
-    # Plot
-    fig, axes = plt.subplots(4, 1, figsize=(16, 16), sharex=True)
-
-    # ── Chart 1: Stacked area - portfolio composition ──
-    ax1 = axes[0]
-    colors = plt.cm.tab10.colors
-    labels = list(ticker_eur.columns)
-    ax1.stackplot(
-        ticker_eur.index,
-        [ticker_eur[col] for col in labels],
-        labels=labels,
-        colors=colors[:len(labels)],
-        alpha=0.7
-    )
-    ax1.plot(portfolio_eur.index, portfolio_eur.values, 'k-', linewidth=1.5, label='Portfolio Total')
-    ax1.set_title('Portfolio Composition (EUR)', fontsize=12)
-    ax1.set_ylabel('EUR')
-    ax1.legend(loc='upper left', fontsize=8)
-    ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:,.0f}€'))
-
-    # ── Chart 2: Blocked EUR vs Portfolio EUR ──
-    ax2 = axes[1]
-    ax2.plot(portfolio_eur.index, portfolio_eur.values, 'b-', linewidth=1.5, label='Portfolio EUR')
-    ax2.plot(blocked_eur.index, blocked_eur.values, 'r-', linewidth=1.5, label='Blocked EUR')
-    ax2.fill_between(blocked_eur.index, blocked_eur.values, alpha=0.2, color='red')
-    ax2.set_title('Blocked EUR vs Portfolio EUR', fontsize=12)
-    ax2.set_ylabel('EUR')
-    ax2.legend(loc='upper left', fontsize=8)
-    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:,.0f}€'))
-
-    # ── Chart 3: Cash % of portfolio ──
-    ax3 = axes[2]
-    cash_pct = (bt_log_dict['cash_eur'].reindex(portfolio_eur.index).fillna(0) / portfolio_eur * 100).fillna(0)
-    ax3.fill_between(cash_pct.index, cash_pct.values, alpha=0.5, color='green', label='Cash %')
-    ax3.plot(cash_pct.index, cash_pct.values, 'g-', linewidth=1)
-    ax3.axhline(y=0, color='red', linestyle='--', linewidth=0.8)
-    ax3.set_title('Cash % of Portfolio', fontsize=12)
-    ax3.set_ylabel('%')
-    ax3.legend(loc='upper left', fontsize=8)
-
-    # ── Chart 4: Euribor ──
-    ax4 = axes[3]
-    ax4.plot(euribor.index, euribor.values * 100, 'purple', linewidth=1.5, label='Euribor 1Y')
-    ax4.fill_between(euribor.index, euribor.values * 100, alpha=0.2, color='purple')
-    ax4.axhline(y=0.1, color='red', linestyle='--', linewidth=0.8, label='Min threshold')
-    ax4.set_title('Euribor 1Y (%)', fontsize=12)
-    ax4.set_ylabel('%')
-    ax4.legend(loc='upper left', fontsize=8)
-    ax4.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-    ax4.xaxis.set_major_locator(mdates.YearLocator())
-
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    # Check 2005-01-03 specifically
-    check_date = '2005-01-03'
-    d = pd.Timestamp(check_date)
-    idx = pos.index.get_indexer([d], method='ffill')[0]
-
-    print(f"\n--- {check_date} ---")
-    print(f"Portfolio EUR: {portfolio_eur.iloc[idx]:,.0f}€")
-    print(f"ER: {er.iloc[idx]:.4f}")
-    for ticker in futures_tickers:
-        if ticker in closes.columns:
-            n = int(pos[ticker].iloc[idx])
-            price = closes[ticker].iloc[idx]
-            mult = settings['mults'].get(ticker, 1)
-            ap_price = price * mult
-            notional = n * ap_price * er.iloc[idx]
-            print(f"  {ticker}: {n} contracts | price={price:.2f} | mult={mult} | ap={ap_price:.2f} | notional={notional:,.0f}€")
-
-
-
-
 

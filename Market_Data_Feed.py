@@ -997,15 +997,18 @@ class Indicators:
         #Euribor Indicator Weights
         from EuriborCorrStudy import get_Euribor_ind
         # Retrieve Training model and get Euribor Ind
-        Euribor_series = tickers_returns['cash'] * 255 * 100
-        self.Euribor_ind = get_Euribor_ind(Euribor_series)
+        if 'cash' in tickers_returns.columns:
+            Euribor_series = tickers_returns['cash'] * 255 * 100
+            self.Euribor_ind = get_Euribor_ind(Euribor_series)
 
         #RSI Curve weight
         #from RSIstudy import get_rsi_curve_weight
         #self.rsi_curve_weight = get_rsi_curve_weight(tickers_returns)
 
         # Combined Weights
-        self.comb_weights =   self.rsi_reverse_keep_weights *self.norm_weights *self.Euribor_ind #+ self.rsi_curve_weight #  * self.exp_weights * self.rsi_sigmoid_weight * m_trend_weights #* trend_corr_high#  * rsi_weights * chopp_factor #* boll_pct_weights
+        self.comb_weights =   self.rsi_reverse_keep_weights *self.norm_weights  #+ self.rsi_curve_weight #  * self.exp_weights * self.rsi_sigmoid_weight * m_trend_weights #* trend_corr_high#  * rsi_weights * chopp_factor #* boll_pct_weights
+        if 'cash' in tickers_returns.columns:
+            self.comb_weights =self.comb_weights*self.Euribor_ind
 
         # Softed Factor
         raw_weight_pct =settings['raw_weight_pct']
