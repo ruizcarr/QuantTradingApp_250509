@@ -114,12 +114,26 @@ def get_orders(settings):
     daily_change_eur = portfolio_value_eur - prev_portfolio_eur
     daily_change_pct = daily_change_eur / prev_portfolio_eur * 100
 
+    # Weekly and monthly change
+    weekly_eur = eod_today.iloc[-6]['portfolio_value_eur'] if len(eod_today) >= 6 else None
+    monthly_eur = eod_today.iloc[-23]['portfolio_value_eur'] if len(eod_today) >= 23 else None
+
+    weekly_change_eur = portfolio_value_eur - weekly_eur if weekly_eur is not None else None
+    weekly_change_pct = weekly_change_eur / weekly_eur * 100 if weekly_eur is not None else None
+
+    monthly_change_eur = portfolio_value_eur - monthly_eur if monthly_eur is not None else None
+    monthly_change_pct = monthly_change_eur / monthly_eur * 100 if monthly_eur is not None else None
+
     portfolio_info = {
         'total_eur': total_eur,
         'total_pct': total_pct,
         'portfolio_value_eur': portfolio_value_eur,
         'daily_change_pct': daily_change_pct,
         'daily_change_eur': daily_change_eur,
+        'weekly_change_pct': weekly_change_pct,
+        'weekly_change_eur': weekly_change_eur,
+        'monthly_change_pct': monthly_change_pct,
+        'monthly_change_eur': monthly_change_eur,
     }
 
     return log_history, exchange_rate, cash_info, positions_info, portfolio_info
@@ -190,20 +204,33 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
 
     lines.append("")
     lines.append("⚠️ Place orders manually with your broker.")
-    lines.append("")
+
     # Positions section
     if positions_info:
         lines.append("")
         lines.append(f"📊 <b>Current Positions:</b>")
         for pos in positions_info:
-            line = f"   <b>{pos['ticker']}</b> | {pos['contracts']} | {pos['pct']:.0f}% | {pos['eur_value']:,.0f} EUR"
+            line = f"   <b>{pos['ticker']}</b> | {pos['contracts']} | {pos['pct']:.0f}% | {pos['eur_value']:,.0f}€"
             lines.append(line)
 
-        # Total
-        change_icon = "📈" if portfolio_info['daily_change_pct'] > 0 else "📉"
-        lines.append(f"   <b>Total</b> | {portfolio_info['total_pct']:.0f}% | {portfolio_info['total_eur']:,.0f} EUR")
-        lines.append(f"   {change_icon} Daily: {portfolio_info['daily_change_pct']:+.2f}% | {portfolio_info['daily_change_eur']:+,.0f} EUR")
-        lines.append(f"   💼 Portfolio: {portfolio_info['portfolio_value_eur']:,.0f} EUR")
+        # Exposition
+        lines.append(f"   <b>Exposition</b> | {portfolio_info['total_pct']:.0f}% | {portfolio_info['total_eur']:,.0f}€")
+        lines.append(f"   💼 <b>Portfolio: {portfolio_info['portfolio_value_eur']:,.0f}€</b>")
+        lines.append("")
+
+        # Daily
+        d_color = "🟢" if portfolio_info['daily_change_pct'] > 0 else "🔴"
+        lines.append(f"   {d_color} Daily:   {portfolio_info['daily_change_pct']:+.2f}% | {portfolio_info['daily_change_eur']:+,.0f}€")
+
+        # Weekly
+        if portfolio_info['weekly_change_pct'] is not None:
+            w_color = "🟢" if portfolio_info['weekly_change_pct'] > 0 else "🔴"
+            lines.append(f"   {w_color} Weekly:  {portfolio_info['weekly_change_pct']:+.2f}% | {portfolio_info['weekly_change_eur']:+,.0f}€")
+
+        # Monthly
+        if portfolio_info['monthly_change_pct'] is not None:
+            m_color = "🟢" if portfolio_info['monthly_change_pct'] > 0 else "🔴"
+            lines.append(f"   {m_color} Monthly: {portfolio_info['monthly_change_pct']:+.2f}% | {portfolio_info['monthly_change_eur']:+,.0f}€")
 
     lines.append("")
     lines.append(f"🚀 Open Trading App: {app_url}")
