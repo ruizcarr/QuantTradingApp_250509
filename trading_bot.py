@@ -22,10 +22,10 @@ def send_telegram(token, chat_id, message):
         "text": message,
         "parse_mode": "HTML"
     }
-    response = requests.post(url, json=payload)
-    print(f"Status code: {response.status_code}")
-    print(f"Response: {response.text}")
-    return response.ok
+    resp = requests.post(url, json=payload)
+    print(f"Status code: {resp.status_code}")
+    print(f"Response: {resp.text}")
+    return resp.ok
 
 
 def get_orders(settings):
