@@ -52,38 +52,24 @@ def get_orders(settings):
     euribor_df = get_euribor_1y_daily()
     euribor_rate = euribor_df['Euribor'].iloc[-1]
 
-    # Cash position info
-    if 'cash' in eod_log_history.columns:
-        last_cash_price = data.tickers_closes['cash'].iloc[-local_settings['add_days'] - 1]
-        current_contracts = int(eod_today['cash'].iloc[-1])
-        previous_contracts = int(eod_today['cash'].iloc[-2])
-        cash_mult = local_settings['mults'].get('cash', 1)
+    # Cash info
+    cash_eur_series = bt_log_dict['cash_eur']
+    eod_today_cash = cash_eur_series[cash_eur_series.index.date <= today]
 
-        if euribor_rate > MIN_EURIBOR:
-            cash_eur = current_contracts * last_cash_price * cash_mult
-            cash_eur_change = None
-            if current_contracts != previous_contracts:
-                prev_cash_eur = previous_contracts * last_cash_price * cash_mult
-                cash_eur_change = cash_eur - prev_cash_eur
-            cash_info = {
-                'eur': cash_eur,
-                'euribor': euribor_rate,
-                'eur_change': cash_eur_change,
-                'current_contracts': current_contracts,
-                'previous_contracts': previous_contracts,
-            }
-        else:
-            cash_info = {
-                'eur': 0,
-                'euribor': euribor_rate,
-                'eur_change': None,
-                'current_contracts': 0,
-                'previous_contracts': 0,
-            }
-    else:
-        cash_info = None
+    current_cash_eur = float(eod_today_cash.iloc[-1]) if euribor_rate > MIN_EURIBOR else 0.0
+    previous_cash_eur = float(eod_today_cash.iloc[-2]) if euribor_rate > MIN_EURIBOR else 0.0
 
-    # Yesterday positions
+    cash_eur_change = None
+    if abs(current_cash_eur - previous_cash_eur) > 1:
+        cash_eur_change = current_cash_eur - previous_cash_eur
+
+    cash_info = {
+        'eur': current_cash_eur,
+        'euribor': euribor_rate,
+        'eur_change': cash_eur_change,
+    }
+
+    # Current positions
     last_row = eod_today.iloc[-1]
     portfolio_value_eur = last_row['portfolio_value_eur']
 
@@ -91,19 +77,14 @@ def get_orders(settings):
     for ticker in eod_log_history.columns:
         if ticker not in settings['tickers'] and ticker != 'cash':
             continue
+        if ticker == 'cash':
+            continue
         contracts = int(last_row[ticker])
         if contracts == 0:
             continue
-        if ticker == 'cash':
-            if euribor_rate <= MIN_EURIBOR:
-                continue
-            last_price = data.tickers_closes['cash'].iloc[-local_settings['add_days'] - 1]
-            cash_mult = local_settings['mults'].get('cash', 1)
-            eur_value = contracts * last_price * cash_mult
-        else:
-            last_price = data.tickers_closes[ticker].iloc[-local_settings['add_days'] - 1]
-            mult = local_settings['mults'].get(ticker, 1)
-            eur_value = contracts * last_price * mult / exchange_rate
+        last_price = data.tickers_closes[ticker].iloc[-local_settings['add_days'] - 1]
+        mult = local_settings['mults'].get(ticker, 1)
+        eur_value = contracts * last_price * mult / exchange_rate
         pct = eur_value / portfolio_value_eur * 100
         positions_info.append({
             'ticker': ticker,
@@ -112,7 +93,7 @@ def get_orders(settings):
             'pct': pct,
         })
 
-    # Portfolio info
+    # Portfolio performance
     total_eur = sum(p['eur_value'] for p in positions_info)
     total_pct = total_eur / portfolio_value_eur * 100
 
@@ -120,31 +101,29 @@ def get_orders(settings):
     daily_change_eur = portfolio_value_eur - prev_portfolio_eur
     daily_change_pct = daily_change_eur / prev_portfolio_eur * 100
 
-    weekly_eur = eod_today.iloc[-6]['portfolio_value_eur'] if len(eod_today) >= 6 else None
-    monthly_eur = eod_today.iloc[-23]['portfolio_value_eur'] if len(eod_today) >= 23 else None
-    yearly_eur = eod_today.iloc[-253]['portfolio_value_eur'] if len(eod_today) >= 253 else None
+    weekly_eur    = eod_today.iloc[-6]['portfolio_value_eur']   if len(eod_today) >= 6   else None
+    monthly_eur   = eod_today.iloc[-23]['portfolio_value_eur']  if len(eod_today) >= 23  else None
+    yearly_eur    = eod_today.iloc[-253]['portfolio_value_eur'] if len(eod_today) >= 253 else None
 
-    weekly_change_eur = portfolio_value_eur - weekly_eur if weekly_eur is not None else None
-    weekly_change_pct = weekly_change_eur / weekly_eur * 100 if weekly_eur is not None else None
-
+    weekly_change_eur  = portfolio_value_eur - weekly_eur  if weekly_eur  is not None else None
+    weekly_change_pct  = weekly_change_eur  / weekly_eur   * 100 if weekly_eur  is not None else None
     monthly_change_eur = portfolio_value_eur - monthly_eur if monthly_eur is not None else None
-    monthly_change_pct = monthly_change_eur / monthly_eur * 100 if monthly_eur is not None else None
-
-    yearly_change_eur = portfolio_value_eur - yearly_eur if yearly_eur is not None else None
-    yearly_change_pct = yearly_change_eur / yearly_eur * 100 if yearly_eur is not None else None
+    monthly_change_pct = monthly_change_eur / monthly_eur  * 100 if monthly_eur is not None else None
+    yearly_change_eur  = portfolio_value_eur - yearly_eur  if yearly_eur  is not None else None
+    yearly_change_pct  = yearly_change_eur  / yearly_eur   * 100 if yearly_eur  is not None else None
 
     portfolio_info = {
-        'total_eur': total_eur,
-        'total_pct': total_pct,
+        'total_eur':          total_eur,
+        'total_pct':          total_pct,
         'portfolio_value_eur': portfolio_value_eur,
-        'daily_change_pct': daily_change_pct,
-        'daily_change_eur': daily_change_eur,
-        'weekly_change_pct': weekly_change_pct,
-        'weekly_change_eur': weekly_change_eur,
+        'daily_change_pct':   daily_change_pct,
+        'daily_change_eur':   daily_change_eur,
+        'weekly_change_pct':  weekly_change_pct,
+        'weekly_change_eur':  weekly_change_eur,
         'monthly_change_pct': monthly_change_pct,
         'monthly_change_eur': monthly_change_eur,
-        'yearly_change_pct': yearly_change_pct,
-        'yearly_change_eur': yearly_change_eur,
+        'yearly_change_pct':  yearly_change_pct,
+        'yearly_change_eur':  yearly_change_eur,
     }
 
     return log_history, exchange_rate, cash_info, positions_info, portfolio_info
@@ -160,7 +139,6 @@ def calc_eur_amount(row, exchange_rate, settings):
 
 def format_orders_message(log_history, exchange_rate, cash_info, positions_info, portfolio_info, settings, app_url):
     orders_history = log_history[log_history['event'].str.contains('Created')]
-    # Filter out cash from orders
     orders_history = orders_history[orders_history['ticker'] != 'cash']
 
     today = datetime.date.today()
@@ -193,7 +171,7 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
 
     lines.append("")
 
-    # Next Orders Forecast
+    # Upcoming Orders
     orders_ahead = orders_history[orders_history['date'] > today]
     if len(orders_ahead) > 0:
         next_day = orders_ahead['date'].iloc[0]
@@ -202,19 +180,15 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
     else:
         lines.append("<b>Upcoming Orders</b>\nNo upcoming orders.")
 
-    # Cash Position Info
-    if cash_info:
-        lines.append("")
-        if cash_info['euribor'] > MIN_EURIBOR:
-            cash_line = f"💰 <b>Cash:</b> {cash_info['eur']:,.0f}€ @ Euribor {cash_info['euribor']:.2%}"
-            lines.append(cash_line)
-            if cash_info['eur_change'] is not None:
-                change_icon = "📈" if cash_info['eur_change'] > 0 else "📉"
-                lines.append(f"   {change_icon} Change: {cash_info['eur_change']:+,.0f}€ ({cash_info['previous_contracts']} → {cash_info['current_contracts']} units)")
-        else:
-            lines.append(f"💰 <b>Cash:</b> In bank account (Euribor {cash_info['euribor']:.2%} below threshold)")
+    # Cash
+    lines.append("")
+    cash_line = f"💰 <b>Cash:</b> {cash_info['eur']:,.0f}€ @ Euribor {cash_info['euribor']:.2%}"
+    lines.append(cash_line)
+    if cash_info['eur_change'] is not None:
+        change_icon = "📈" if cash_info['eur_change'] > 0 else "📉"
+        lines.append(f"   {change_icon} Change: {cash_info['eur_change']:+,.0f}€")
 
-    # Positions section
+    # Positions
     if positions_info:
         lines.append("")
         lines.append(f"📊 <b>Current Positions:</b>")
@@ -225,7 +199,6 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
         lines.append(f"   💼 <b>Portfolio: {portfolio_info['portfolio_value_eur']:,.0f}€</b>")
         lines.append("")
 
-        # Performance
         d_icon = "🟢" if portfolio_info['daily_change_pct'] > 0 else "🔴"
         lines.append(f"   {d_icon} Daily:   {portfolio_info['daily_change_pct']:+.2f}% | {portfolio_info['daily_change_eur']:+,.0f}€")
 
@@ -249,9 +222,9 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
 
 
 def main():
-    token = os.environ["TELEGRAM_TOKEN"]
+    token   = os.environ["TELEGRAM_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    app_url = "https://quanttradingapp.streamlit.app"  # <- update if different
+    app_url = "https://quanttradingapp.streamlit.app"
 
     try:
         print("Step 1: Fetching orders...")
