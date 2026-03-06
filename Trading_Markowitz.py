@@ -106,8 +106,26 @@ def compute(settings,data_ind):
 
             tickers_returns=data.tickers_returns
             tickers_returns =tickers_returns.reindex(nc.index)
-            returns=nc * tickers_returns
-            cum_ret_by_ticker=(1+returns).cumprod()
+            tickers_closes =data.tickers_closes
+            tickers_closes =tickers_closes.reindex(nc.index)
+            closes_diff=tickers_closes.diff()
+            mults = [settings['mults'].get(ticker, 1) for ticker in tickers_returns.columns]
+            returns=(nc * closes_diff*mults).multiply(tickers_closes['EURUSD=X'].shift(1),axis=0)
+            returns['sum']=returns.sum(axis=1)
+            cum_ret_by_ticker=returns.cumsum()
+            #cum_ret_by_ticker.plot(title='cumulative returns')
+
+            portfolio_exposition=(nc * tickers_closes * mults).multiply(tickers_closes['EURUSD=X'].shift(1),axis=0)
+            portfolio_exposition['sum'] = portfolio_exposition.sum(axis=1)
+            #portfolio_exposition.plot(title='portfolio_exposition Eur')
+
+
+            cash_to_invest=settings['startcash']+cum_ret_by_ticker[['sum']]
+            cash_to_invest =cash_to_invest.rolling(250,min_periods=1).min()
+
+            portfolio_exposition_pct=portfolio_exposition.multiply(1/np.array(cash_to_invest),axis=0)
+            portfolio_exposition_pct.plot(title='portfolio_exposition_pct')
+
             tickers_cumret=(1+tickers_returns).cumprod()
             #nc_returns_volat=returns.rolling(22).std()*16
             #nc_returns_volat.plot(title='nc_returns_volat')
@@ -158,7 +176,7 @@ def compute(settings,data_ind):
     full_path = os.path.join(folder_name, csv_filename)  # Creates the correct path for your OS
 
     #Save log_history to csv
-    log_history.to_csv(full_path, index=False)
+    #log_history.to_csv(full_path, index=False)
 
 
     if settings['verbose']:

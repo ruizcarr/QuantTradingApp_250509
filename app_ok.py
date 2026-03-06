@@ -1,0 +1,612 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import datetime
+
+from datetime import date
+from datetime import timedelta
+import time
+import pytz
+import altair as alt
+import matplotlib.pyplot as plt
+import json
+import random
+import subprocess
+import sys
+import os
+
+import numpy as np, random
+np.random.seed(42)
+random.seed(42)
+
+from check_password import check_password
+from Trading_Markowitz import compute,process_log_data
+from config.trading_settings import settings
+import Market_Data_Feed as mdf
+
+import copy
+
+# Update Settings
+# Import Trading Settings
+settings['verbose'] = False
+settings['qstats'] = False  # st.session_state.qstats
+# settings['do_BT'] = True
+
+local_settings = copy.deepcopy(settings)
+
+
+#For Local Run bellow in the pycharm terminal
+#streamlit run app.py
+#Ctrl + c to stop
+#Internet url: https://quanttradingapp.streamlit.app/
+
+
+
+#Main Code
+def main(settings):
+
+    #if check_password():
+    if True:
+
+        # App Settings
+        # Set the page layout to wide
+        st.set_page_config(layout="wide", page_title='Quant Trading App')
+
+        # Initialize session_state values
+        chart_len_dict = {'Weekly': 5 + 1, 'Monthly': 22 + 1, 'Quarterly': 3 * 22 + 1}
+        if 'chart_len_key' not in st.session_state:
+            st.session_state.chart_len_key = 'Quarterly'
+        if 'daysback' not in st.session_state:
+            #get_daysback()
+            st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
+        if 'data_show' not in st.session_state:
+            st.session_state.data_show = 'returns'
+        if 'qstats' not in st.session_state:
+            st.session_state.qstats = False
+        if "last_refresh" not in st.session_state:
+            st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
+
+
+
+
+
+        #Debug
+        #st.write("Before Load & Compute: settings end last date", settings["end"])
+
+        # ---------------- Main Execution ----------------
+
+        # Now load (cached) data
+        data, log_history,bt_log_dict = load_and_compute_data(**local_settings)
+
+        returns = data.tickers_returns
+        closes = data.tickers_closes
+        intraday_tickers_returns=data.intraday_tickers_returns
+
+        tickers=returns.columns
+
+        # cash exception
+        if 'cash' in intraday_tickers_returns.columns:
+            intraday_tickers_returns['cash']=returns['cash'].copy()
+
+        #Debug
+        #st.write("After Load & Compute: settings end last date",settings['end'])
+        #st.write(st.session_state)
+        #st.write(closes.tail(10))
+        # returns = closes.pct_change()
+        #st.write(returns)
+        #st.write(intraday_tickers_returns)
+        #st.write(log_history)
+
+        #Process Log Data
+        eod_log_history,trading_history=process_log_data(log_history,settings)
+
+        #Returns by Ticker
+        ret_by_ticker = returns[tickers] * eod_log_history[tickers]
+
+        #Get today
+        tz = pytz.timezone('Europe/Madrid')
+        today = datetime.datetime.now(tz).date()
+
+        if st.session_state.get("just_refreshed", False):
+            st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
+            st.session_state["just_refreshed"] = False
+
+        #Display Title & tickers data
+        closes_today=display_tickers_data(
+            closes,
+            intraday_tickers_returns, #To avoid yahoo previous day mising data problems
+            settings,
+            sidebar=False,
+            daysback=st.session_state.daysback,
+            data_show=st.session_state.data_show,
+            chart=False
+        )
+
+        st.divider()
+
+        #Display Portfolio Positions
+        last_trade_date=trading_history.index[trading_history.index.to_series().dt.date<=today][-1]
+        exchange_rate=display_portfolio_positions(eod_log_history,trading_history,last_trade_date,settings,ret_by_ticker,returns,closes_today,today,daysback=st.session_state.daysback)
+
+        #Display Orders
+        display_orders(log_history,settings)
+
+        st.divider()
+
+        #Display Next Trading Forecast
+        next_trades=trading_history.index[trading_history.index.to_series().dt.date>today]
+        if len(next_trades)>0:
+            next_trade_date=next_trades[0]
+        else:
+            next_trade_date = False
+        with st.expander("See Next Trading Forecast:"):
+            if not next_trade_date:
+                st.write(f"**Keep Current Positions. No Trading Forecast within {settings['add_days']} Days**")
+            else:
+                exchange_rate=display_portfolio_positions(eod_log_history,trading_history,next_trade_date,settings,ret_by_ticker,returns,closes_today,today,forecast=True)
+
+        #Display Current Portfolio Value
+        display_portfolio_results(eod_log_history,settings,daysback=st.session_state.daysback)
+
+        # Show qstats annalitics HTML is a separate page
+        #st.checkbox('Show Annalytics:', value=None, key='qstats')
+        #if st.session_state.qstats:
+
+        compute_qstats(bt_log_dict, closes, settings["add_days"], exchange_rate)
+
+        #Input Display Options
+        with st.expander('Display Options:'):
+            cols = st.columns(4)
+            #Chart length
+            #cols[0].selectbox('Chart Length:', chart_len_keys, key='chart_len_key',on_change=get_daysback)
+            cols[1].selectbox('Data to Show:', ['returns', 'closes'],key='data_show')
+            #cols[2].checkbox('Show Annalytics:',value=True,  key='qstats')
+
+        #Display Log History
+        with st.expander("See Historical Log:"):
+
+            yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
+            log_history[log_history["date_time"] >= yesterday]
+
+            closes.loc[yesterday:].iloc[0]
+
+
+        #log_history_sort=log_history.sort_values('date', ascending=False)
+            #log_history_sort
+            #closes_sort=closes.sort_index(ascending=False)
+            #closes_sort
+            #eod_log_history
+            #returns
+            #ret_by_ticker
+            #trading_history
+            #log_history
+            #closes
+            #lows
+
+#Define Functions
+
+def get_daysback():
+    chart_len_dict = {'Weekly': 6, 'Monthly': 23, 'Quarterly': 67}
+    st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
+
+def display_portfolio_positions(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,closes_today,today,daysback=3*22+1,forecast=False):
+
+    st.write(f"**Portfolio Positions:**")
+
+    #Get tickers
+    tickers=returns.columns
+
+    #Get portfolio and trading of today
+    last_portfolio = eod_log_history.loc[:today].iloc[-1][tickers]
+    pre_portfolio = eod_log_history.loc[:today].iloc[-2][tickers]
+    last_trade = last_portfolio-pre_portfolio
+
+    #Position & Portfolio Value at end of Today in USD and EUR
+
+    pos_value_today=eod_log_history.loc[:today,'pos_value'].iloc[-1]
+    #porfolio_value_today = eod_log_history.loc[:today, 'portfolio_value'].iloc[-1]
+    porfolio_value_today_eur = eod_log_history.loc[:today, 'portfolio_value_eur'].iloc[-1]
+
+    exchange_rate=eod_log_history.loc[:today, 'exchange_rate'].iloc[-1]
+    pos_value_today_eur=pos_value_today*exchange_rate
+    exposition = pos_value_today_eur / porfolio_value_today_eur * 100
+
+    #Display Current Portfolio
+    #n_col=len(settings["tickers"])+1
+    n_col = len(tickers) + 1
+    #col_width_list=[2]+[1]*(n_col-1)
+    col_width_list = [7] + [3] * (n_col - 1)
+    cols=st.columns(col_width_list)
+
+    with cols[0]:
+        st.write("Tickers:")
+        st.write("Nbr of Contracts:")
+        st.write(f"Last Trade date: {date}")
+        st.write(f"Position Value | Exposition @: {today}")
+        #st.subheader(f"{pos_value_today:,.0f} USD /  {exposition:,.0f} %")
+        st.subheader(f"{pos_value_today_eur:,.0f} € |  {exposition:,.0f} %")
+
+    for i in range(1,n_col):
+        j=i-1
+        ticker=trading_history.columns[j]
+        label=f"**{ticker}**"
+        nc=int(last_portfolio[j])
+        delta_nc=int(last_trade[j])
+        cols[i].metric(label=label,value=nc,delta=delta_nc)
+        with cols[i]:
+            pos_value_today_eur_by_ticker=closes_today[ticker]*nc*exchange_rate*settings['mults'][ticker]
+            pos_pct_by_ticker = pos_value_today_eur_by_ticker / porfolio_value_today_eur * 100
+            st.write(f"{pos_value_today_eur_by_ticker:,.0f} € | {pos_pct_by_ticker:,.0f} %")
+
+        #Chart weights evolution
+
+        with cols[i]:
+            w=daysback #3*22
+            if daysback > 6:
+                chart_ts_altair(eod_log_history.iloc[-w:].loc[:today], ticker)
+
+            if not forecast:
+                cum_ret_by_ticker = (1 + ret_by_ticker.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
+                #cum_ret_by_ticker = cum_ret_by_ticker.fillna(1)
+                cum_ret = (1 + returns.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
+                alt_chart1=chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
+                alt_chart2 = chart_ts_altair(cum_ret,  ticker, color="grey", st_altair_chart=False)
+                st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
+
+    return exchange_rate
+
+
+def display_portfolio_results(eod_log_history, settings, daysback=3*22):
+    st.write("**Portfolio Results:**")
+
+    # Columns layout
+    col_width_list = [3] + [2] * 4
+    cols = st.columns(col_width_list)
+
+    # Index of last real row before added future days
+    today_idx = -settings['add_days'] - 1
+    latest_row = eod_log_history.iloc[today_idx]
+
+    # Portfolio Value
+    portfolio_value_eur = latest_row["portfolio_value_eur"]
+    ret = latest_row["portfolio_return"]
+    with cols[0]:
+        st.metric(label=f"**Portfolio Value {latest_row.name.date()}**", value=f"{portfolio_value_eur:,.0f} €", delta=f"{ret:.1%}")
+        # Chart Portfolio Value
+        chart_ts_altair(
+            eod_log_history.iloc[today_idx - daysback + 1: today_idx + 1],
+            "portfolio_value_eur"
+        )
+
+    # Display CAGR, weekly and monthly return
+    keys = ["cagr", "weekly_return", "monthly_return"]
+    for i, key in enumerate(keys):
+        cagr = latest_row[key]
+        diff_eur = f"{cagr * portfolio_value_eur:,.0f} €"
+        cols[i + 1].metric(label=f"**{key}**", value=diff_eur, delta=f"{cagr:.1%}")
+
+    # Display Drawdown
+    ddn = latest_row["ddn_eur"]
+    cols[4].metric(label="**Drawdown YTD**", delta="", value=f"{ddn:.1%}")
+
+
+def chart_ts_altair(ts,col,color="blue",st_altair_chart=True):
+    df=ts[col].rename_axis('date').reset_index()
+    alt_chart=alt.Chart(df,height=120).mark_line(color=color).encode(
+x=alt.X('date', title=''),
+y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
+)
+
+    if st_altair_chart:
+        st.altair_chart(alt_chart,use_container_width=True )
+
+    return alt_chart
+
+def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22, data_show='returns', chart=True):
+    """
+    Display market data (closes or returns) for all tickers.
+    Always shows today's data based on 'add_days', avoiding system datetime.
+    """
+    #tickers = settings["tickers"].copy()
+    tickers = closes.columns
+    n_col = len(tickers) + 1
+    col_width_list = [7] + [3] * (n_col - 1)
+    cols = st.columns(col_width_list)
+
+    # Use last real row before future added days
+    today_idx = -settings['add_days'] - 1
+    closes_today = closes.iloc[today_idx]
+    returns_today = returns.iloc[today_idx]
+
+    # Header string: use the index date instead of datetime.now()
+    last_data_date = closes.index[today_idx].tz_localize(tz="Europe/Madrid")
+
+    # ADD HERE:
+    today = pd.Timestamp.now(tz="Europe/Madrid").date()
+    days_old = (today - last_data_date.date()).days
+    refresh_time = pd.Timestamp.now(tz="Europe/Madrid").strftime('%H:%M')
+
+    if days_old == 0:
+        staleness = ""
+    elif days_old == 1:
+        staleness = " ⚠️ 1 day old"
+    else:
+        staleness = f" 🔴 {days_old} days old"
+
+    timestamp_str = f"{last_data_date.strftime('%Y-%m-%d')}{staleness} (refreshed at {refresh_time})"
+
+    if "last_refresh" not in st.session_state:
+        st.session_state["last_refresh"] = timestamp_str
+
+    if st.session_state.get("just_refreshed", False):
+        st.session_state["last_refresh"] = timestamp_str
+        st.session_state["just_refreshed"] = False
+
+
+    #st.write(market_data_head_1)
+    #st.write(closes.tail(6))
+
+    def get_chart_data(data, daysback=5, data_show='returns'):
+        # Pick last 'daysback' rows including today
+        data_ch = data.iloc[today_idx - daysback + 1: today_idx + 1]
+        cum_ret_ch = (1 + data_ch.pct_change()).cumprod().fillna(1)
+        return cum_ret_ch if data_show == 'returns' else data_ch
+
+    for i, ticker in enumerate(tickers):
+        close_val = closes_today[ticker]
+        ret_val = returns_today[ticker]
+
+        # Format display values
+        if ticker == 'EURUSD=X':
+            close_fmt = f"{close_val:,.3f}"
+        elif ticker == 'CL=F':
+            close_fmt = f"{close_val:,.2f}"
+        else:
+            close_fmt = f"{close_val:,.0f}"
+
+        delta_val = f"{ret_val:.2%}"
+        if ticker == 'cash':
+            ret_val *= 255
+            delta_val = f"@ {ret_val:.2%} EURIBOR"
+
+        # Display header in first column
+        if i == 0:
+            cols[0].title("Quant Trading App")
+            #cols[0].write(market_data_head_1)
+            #cols[0].write(market_data_head_2)
+
+            # ----------------- Refresh Button -----------------
+            if cols[0].button("🔄 Refresh Data"):
+                load_and_compute_data.clear()
+                st.session_state["just_refreshed"] = True
+                st.rerun()
+
+            # Display timestamp
+            cols[0].write(
+                f"🕒 **{st.session_state['last_refresh']}** (data delayed 15min )"
+            )
+
+
+        # Display metrics
+        cols[i + 1].metric(label=f"**{ticker}**", value=close_fmt, delta=delta_val)
+
+        # Display small chart if enabled
+        if chart:
+            chart_data = get_chart_data(closes if data_show != 'returns' else returns, daysback=daysback, data_show=data_show)
+            with cols[i + 1]:
+                chart_ts_altair(chart_data, ticker)
+
+    return closes_today
+
+
+def display_orders(log_history,settings):
+    def display_orders_log(df, title,col=0):
+        if len(df) > 0:
+            cols[col].write(f"{title} **{df['date'].iloc[0]}** 00:00(CET) ")
+            for i, row in df.iterrows():
+                order_log = f"{row['ticker']} {row['exectype']} {row['B_S']}  {row['size']}"
+                if row['exectype'] == "Stop":
+                    price_log=f" @ {row['price']}"
+                    order_log = order_log + price_log
+
+                #col=df.columns.get_loc(row['ticker'])
+                #cols[col].write(order_log)
+                cols[col].subheader(order_log)
+                #if i>0: cols[0].write("  ")
+
+        else:
+            cols[col].write(f"No {title}")
+            #cols[1].write("  ")
+
+            #for j in range(2):
+            #    for i in range(1,len(cols)):
+            #        cols[i].write(" ")
+
+
+
+    # Columns for dispaly
+    col_width_list = [2] +[2] + [2]
+    cols = st.columns(col_width_list)
+
+    cols[0].write(f"**Orders to Broker:**")
+
+    # Get Today SELL Stops Log
+    #orders_history = log_history[log_history['event'].str.contains('Order Created')]  # [['date','event','ticker','size','price']]
+    orders_history = log_history[log_history['event'].str.contains('Created')]  # [['date','event','ticker','size','price']]
+    today = datetime.date.today()
+    #today = datetime.datetime.strptime('2023-07-20', '%Y-%m-%d').date()
+    today_orders = orders_history.loc[orders_history['date'] == today]
+
+    display_orders_log(today_orders, 'Today Orders',col=1)
+
+    #Space
+    #for i in range( len(cols)):
+    #    cols[i].write(f"  ")
+
+    # Get Next days SELL Stops Log
+    orders_ahead = orders_history.loc[orders_history['date'] > today]
+    if len(orders_ahead) > 0:
+        next_day = orders_ahead['date'].iloc[0]
+        next_orders = orders_history.loc[orders_history['date'] == next_day]
+
+        display_orders_log(next_orders, 'Next Orders Forecast',col=2)
+
+    else:
+        cols[1].write("No Orders Forecast  in the next days")
+
+# ---------------- Load & Compute ----------------
+@st.cache_data(ttl=900)
+def load_and_compute_data(**settings_kwargs):
+    settings = settings_kwargs
+    #"""
+    #Fetches raw data and performs computation.
+    #Always fetches fresh Yahoo data.
+    #"""
+    data_ind = mdf.Data_Ind_Feed(settings).data_ind
+    data, _ = data_ind
+
+    #st.write("settings start", settings["start"])
+    #st.write("settings end last date", settings["end"])
+    #st.write("data_bundle just after Yahoo Finance download start date", data.data_bundle_yf_raw.index[0])
+
+    #st.write("data_bundle just after Yahoo Finance download last date", data.data_bundle_yf_raw.index[-1])
+    #st.write("data_bundle last date", data.data_bundle.index[-1])
+
+    log_history, _,bt_log_dict = compute(settings, data_ind)
+
+    return data, log_history,bt_log_dict
+
+
+def compute_qstats(bt_log_dict, closes, add_days, exchange_rate):
+    from Backtest_Class import bt_qstats_report
+    q_returns, q_title, q_benchmark, q_benchmark_ticker, q_filename = bt_qstats_report(bt_log_dict, closes, add_days, exchange_rate)
+
+    import streamlit.components.v1 as components
+    import quantstats_lumi as qs
+    import tempfile
+    import os
+
+    try:
+        # 1. Crear una ruta de archivo válida en la carpeta temporal del sistema
+        # Esto evita el ValueError y los problemas de permisos en Streamlit Cloud
+        temp_path = os.path.join(tempfile.gettempdir(), "qs_report.html")
+
+        # 2. Generar el informe. Pasamos el string de la ruta al parámetro 'output'
+        qs.reports.html(
+            q_returns,
+            title=q_title,
+            benchmark=q_benchmark,
+            benchmark_title=q_benchmark_ticker,
+            output=temp_path
+        )
+
+        # 2. Read and Modify the HTML for Mobile
+        with open(temp_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+
+        # 3. Precision CSS: Fixes overlap, restores horizontal, removes huge gaps
+        mobile_fix_css = """
+            <style>
+                /* 1. Eliminar alturas fijas que causan los huecos gigantes */
+                div, .container, .row { 
+                    height: auto !important; 
+                    min-height: 0 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    position: relative !important; /* Mantiene la visibilidad del gráfico */
+                }
+
+                /* 2. Forzar a los gráficos a ser compactos */
+                img { 
+                    display: block !important; 
+                    width: 100% !important; 
+                    height: auto !important;
+                    margin: 0 auto !important; /* Centrado sin margen vertical */
+                }
+
+                /* 3. Eliminar los saltos de línea y párrafos vacíos de la librería */
+                br, p { display: none !important; }
+
+                /* 4. Ajustar las tablas de métricas para que no ocupen espacio extra */
+                .table-container, table { 
+                    margin: 0% !important;
+                    padding: 25% !important;
+                    width: 100% !important;
+                    font-size: 8px !important;
+                }
+
+                /* 5. Títulos pequeños y pegados al gráfico */
+                h4, h5 { 
+                    margin: 5px 0 2px 0 !important; 
+                    padding: 0 !important;
+                    font-size: 12px !important;
+                }
+
+                /* 6. Corregir el ancho de 960px que viene por defecto */
+                [style*="width: 960px"], [style*="width:960px"] {
+                    width: 100% !important;
+                }
+            </style>
+            """
+
+        # 5. Inyectar el CSS en el HTML
+        # responsive_html = html_content.replace("</head>", mobile_fix_css + "</head>")
+
+        # 4. Display in Streamlit
+        # components.html(responsive_html, height=1000, scrolling=True)
+
+        # We encode the HTML to base64 so the browser can treat it as a standalone file
+        import base64
+
+        final_html = html_content.replace("</head>", mobile_fix_css + "</head>")
+
+        # 2. Codificar para pasar el contenido al script
+        b64_content = base64.b64encode(final_html.encode()).decode()
+
+        # 3. Script para abrir una ventana y escribir el contenido (Evita el bloqueo de data:uri)
+        # Usamos un botón de Streamlit que activa este JavaScript
+        st.components.v1.html(
+            f"""
+            <script>
+            function openReport() {{
+                var htmlContent = atob("{b64_content}");
+                var blob = new Blob([htmlContent], {{type: 'text/html'}});
+                var url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+            }}
+            </script>
+            <button onclick="openReport()" style="
+                width: 100%; 
+                padding: 12px; 
+                background-color: #ff4b4b; 
+                color: white; 
+                border: none; 
+                border-radius: 8px; 
+                cursor: pointer; 
+                font-weight: bold;
+                font-size: 16px;">
+                🚀 Show Annalitics
+            </button>
+            """,
+            height=70,
+        )
+
+
+    except Exception as e:
+        st.warning(f"Analytics report unavailable: {e}")
+
+    finally:
+        # 5. Limpieza: Intentar borrar el archivo temporal si existe
+        try:
+            if 'temp_path' in locals() and os.path.exists(temp_path):
+                os.remove(temp_path)
+        except:
+            pass
+
+
+if __name__ == '__main__':
+    main(local_settings)
+
+
+
+

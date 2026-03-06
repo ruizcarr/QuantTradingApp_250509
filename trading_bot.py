@@ -76,7 +76,53 @@ def get_orders(settings):
             'previous_contracts': previous_contracts,
         }
 
-    return log_history, exchange_rate, cash_info
+    # Yesterday positions
+    today = datetime.date.today()
+    eod_today = eod_log_history[eod_log_history.index.date <= today]
+    last_row = eod_today.iloc[-1]
+    portfolio_value_eur = last_row['portfolio_value_eur']
+
+    positions_info = []
+    for ticker in eod_log_history.columns:
+        if ticker not in settings['tickers'] and ticker != 'cash':
+            continue
+        contracts = int(last_row[ticker])
+        if contracts == 0:
+            continue
+        if ticker == 'cash':
+            last_price = data.tickers_closes['cash'].iloc[-local_settings['add_days'] - 1]
+            cash_mult = local_settings['mults'].get('cash', 1)
+            eur_value = contracts * last_price * cash_mult
+        else:
+            last_price = data.tickers_closes[ticker].iloc[-local_settings['add_days'] - 1]
+            mult = local_settings['mults'].get(ticker, 1)
+            eur_value = contracts * last_price * mult / exchange_rate
+        pct = eur_value / portfolio_value_eur * 100
+        positions_info.append({
+            'ticker': ticker,
+            'contracts': contracts,
+            'eur_value': eur_value,
+            'pct': pct,
+        })
+
+    # Total position and daily change
+    total_eur = sum(p['eur_value'] for p in positions_info)
+    total_pct = total_eur / portfolio_value_eur * 100
+
+    # Daily portfolio change
+    prev_portfolio_eur = eod_today.iloc[-2]['portfolio_value_eur']
+    daily_change_eur = portfolio_value_eur - prev_portfolio_eur
+    daily_change_pct = daily_change_eur / prev_portfolio_eur * 100
+
+    portfolio_info = {
+        'total_eur': total_eur,
+        'total_pct': total_pct,
+        'portfolio_value_eur': portfolio_value_eur,
+        'daily_change_pct': daily_change_pct,
+        'daily_change_eur': daily_change_eur,
+    }
+
+    return log_history, exchange_rate, cash_info, positions_info, portfolio_info
 
 
 def calc_eur_amount(row, exchange_rate, settings):
@@ -88,7 +134,7 @@ def calc_eur_amount(row, exchange_rate, settings):
     return eur_amount
 
 
-def format_orders_message(log_history, exchange_rate, cash_info, settings, app_url):
+def format_orders_message(log_history, exchange_rate, cash_info, positions_info, portfolio_info , settings, app_url):
     orders_history = log_history[log_history['event'].str.contains('Created')]
     # Filter out cash from orders
     orders_history = orders_history[orders_history['ticker'] != 'cash']
@@ -144,7 +190,25 @@ def format_orders_message(log_history, exchange_rate, cash_info, settings, app_u
 
     lines.append("")
     lines.append("⚠️ Place orders manually with your broker.")
+    lines.append("")
+    # Positions section
+    if positions_info:
+        lines.append("")
+        lines.append(f"📊 <b>Current Positions:</b>")
+        for pos in positions_info:
+            line = f"   <b>{pos['ticker']}</b> | {pos['contracts']} | {pos['pct']:.0f}% | {pos['eur_value']:,.0f} EUR"
+            lines.append(line)
+
+        # Total
+        change_icon = "📈" if portfolio_info['daily_change_pct'] > 0 else "📉"
+        lines.append(f"   <b>Total</b> | {portfolio_info['total_pct']:.0f}% | {portfolio_info['total_eur']:,.0f} EUR")
+        lines.append(f"   {change_icon} Daily: {portfolio_info['daily_change_pct']:+.2f}% | {portfolio_info['daily_change_eur']:+,.0f} EUR")
+        lines.append(f"   💼 Portfolio: {portfolio_info['portfolio_value_eur']:,.0f} EUR")
+
+    lines.append("")
     lines.append(f"🚀 Open Trading App: {app_url}")
+
+
 
     return "\n".join(lines)
 
@@ -156,11 +220,11 @@ def main():
 
     try:
         print("Step 1: Fetching orders...")
-        log_history, exchange_rate, cash_info = get_orders(settings)
+        log_history, exchange_rate, cash_info, positions_info, portfolio_info = get_orders(settings)
         print("Step 2: Orders fetched OK")
         print(f"Cash info: {cash_info}")
 
-        message = format_orders_message(log_history, exchange_rate, cash_info, settings, app_url)
+        message = format_orders_message(log_history, exchange_rate, cash_info, positions_info, portfolio_info, settings, app_url)
         print(f"Step 3: Message formatted OK")
         print(f"Message:\n{message}")
 
