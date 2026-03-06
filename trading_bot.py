@@ -124,6 +124,10 @@ def get_orders(settings):
     monthly_change_eur = portfolio_value_eur - monthly_eur if monthly_eur is not None else None
     monthly_change_pct = monthly_change_eur / monthly_eur * 100 if monthly_eur is not None else None
 
+    yearly_eur = eod_today.iloc[-253]['portfolio_value_eur'] if len(eod_today) >= 253 else None
+    yearly_change_eur = portfolio_value_eur - yearly_eur if yearly_eur is not None else None
+    yearly_change_pct = yearly_change_eur / yearly_eur * 100 if yearly_eur is not None else None
+
     portfolio_info = {
         'total_eur': total_eur,
         'total_pct': total_pct,
@@ -134,6 +138,8 @@ def get_orders(settings):
         'weekly_change_eur': weekly_change_eur,
         'monthly_change_pct': monthly_change_pct,
         'monthly_change_eur': monthly_change_eur,
+        'yearly_change_pct': yearly_change_pct,
+        'yearly_change_eur': yearly_change_eur,
     }
 
     return log_history, exchange_rate, cash_info, positions_info, portfolio_info
@@ -231,6 +237,11 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
         if portfolio_info['monthly_change_pct'] is not None:
             m_color = "🟢" if portfolio_info['monthly_change_pct'] > 0 else "🔴"
             lines.append(f"   {m_color} Monthly: {portfolio_info['monthly_change_pct']:+.2f}% | {portfolio_info['monthly_change_eur']:+,.0f}€")
+
+        #Yearly
+        if portfolio_info['yearly_change_pct'] is not None:
+            y_icon = "🟢" if portfolio_info['yearly_change_pct'] > 0 else "🔴"
+            lines.append(f"   {y_icon} Yearly:  {portfolio_info['yearly_change_pct']:+.2f}% | {portfolio_info['yearly_change_eur']:+,.0f}€")
 
     lines.append("")
     lines.append(f"🚀 Open Trading App: {app_url}")
