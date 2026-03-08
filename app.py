@@ -243,6 +243,13 @@ def display_portfolio_positions(eod_log_history, trading_history, last_trade_dat
         st.write(f"Last Trade date: {last_trade_date}")
         st.write(f"Position Value | Exposition @: {today}")
         st.subheader(f"{pos_value_today_eur:,.0f} € | {exposition:,.0f} %")
+        # Cash line below positions
+        # st.divider()
+        if euribor_rate > MIN_EURIBOR:
+            cash_pct = cash_eur / porfolio_value_today_eur * 100
+            st.write(f"💰 **Cash (Euribor {euribor_rate:.2%}):** {cash_eur:,.0f} € | {cash_pct:.0f} %")
+        else:
+            st.write(f"💰 **Cash:** In bank account (Euribor {euribor_rate:.2%} below threshold)")
 
     for i, ticker in enumerate(futures_tickers):
         label  = f"**{ticker}**"
@@ -267,13 +274,6 @@ def display_portfolio_positions(eod_log_history, trading_history, last_trade_dat
                 alt_chart2 = chart_ts_altair(cum_ret, ticker, color="grey", st_altair_chart=False)
                 st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
 
-    # Cash line below positions
-    #st.divider()
-    if euribor_rate > MIN_EURIBOR:
-        cash_pct = cash_eur / porfolio_value_today_eur * 100
-        st.write(f"💰 **Cash (Euribor {euribor_rate:.2%}):** {cash_eur:,.0f} € | {cash_pct:.0f} %")
-    else:
-        st.write(f"💰 **Cash:** In bank account (Euribor {euribor_rate:.2%} below threshold)")
 
     return exchange_rate
 
