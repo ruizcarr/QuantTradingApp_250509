@@ -38,7 +38,6 @@ def main():
     settings['do_BT'] = True
     #settings['startcash'] = 43000  # 52000 # '2016-01-01'
     # settings['tickers_bounds'] = {'ES=F': (0,0.5), 'NQ=F': (0,0.6), 'GC=F': (0.00,0.4), 'CL=F': (0,0.15), 'EURUSD=X': (0,0.0)} # {'ES=F': (0,0.5), 'NQ=F': (-0,0.6), 'GC=F': (0.00,0.5), 'CL=F': (0,0.25), 'EURUSD=X': (-0.00,0.0)}
-    #settings['apply_strategy_weights'] = True
 
     # Get Data
 
@@ -208,9 +207,6 @@ def compute_optimized_markowitz_d_w_m(tickers_returns, settings):
     # Optimization by Utility Up factor
     weights_df, metrics_df, rolling_metrics_dict, returns_p = compute_utility_factor(settings['apply_utility_factor'],tickers_returns, weights_df, metrics_df, rolling_metrics_dict, returns_p,weight_sum_lim,'dayly')
 
-    # Apply Strategy Weights
-    weights_df, metrics_df, rolling_metrics_dict,_ = apply_strategy_weights(tickers_returns, settings,weights_df,metrics_df,rolling_metrics_dict,weight_sum_lim,'dayly')
-
     return weights_df, metrics_df, rolling_metrics_dict, weekly_metrics_df, monthly_metrics_df,markowitz_metrics_dicts
 
 def compute_optimized_markowitz(tickers_returns, settings):
@@ -219,9 +215,6 @@ def compute_optimized_markowitz(tickers_returns, settings):
 
     # Optimization by Utility Up factor
     weights_df, metrics_df, rolling_metrics_dict, returns_p = compute_utility_factor(settings['apply_utility_factor'],tickers_returns, weights_df, metrics_df, rolling_metrics_dict, returns_p)
-
-    # Apply Strategy Weights
-    weights_df, metrics_df, rolling_metrics_dict,_ = apply_strategy_weights(tickers_returns, settings,weights_df,metrics_df,rolling_metrics_dict)
 
     return weights_df, metrics_df, rolling_metrics_dict,returns_p
 
@@ -859,26 +852,7 @@ def compute_utility_factor(apply_utility_factor,tickers_returns, weights_in_df, 
 
     return weights_uty_df, metrics_p, rolling_metrics_dict, returns_p
 
-def apply_strategy_weights(tickers_returns, settings,weights_df,metrics_df,rolling_metrics_dict,weight_sum_lim,strat_period='dayly'):
-    if settings['apply_strategy_weights']:
-        ind = mdf.Indicators(tickers_returns, settings)
-        indicators_dict = ind.indicators_dict
-        strategy_weights = indicators_dict['comb_weights']
-    else:
-        strategy_weights = 1
-    weights_df =weights_df * strategy_weights
 
-    # Set Limit to Weights Sum
-    weights_df=set_limit_to_weights_sum(weights_df,weight_sum_lim)
-
-
-    #Update Metrics
-    strategy_returns = get_strategy_returns(weights_df, tickers_returns)
-    metrics,rolling_metrics = get_returns_metrics(strategy_returns,strat_period)
-    metrics_df['strategy']=metrics.T
-    rolling_metrics_dict['strategy']=rolling_metrics
-
-    return weights_df,metrics_df,rolling_metrics_dict,strategy_weights
 
 
 def get_log_history_NOK(bt_log_dict):

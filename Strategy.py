@@ -43,9 +43,7 @@ class Strategy:
         if settings['mkwtz_vectorized']:
 
             #Get Markowitz_Vectorized weights
-            v_settings=settings.copy()
-            v_settings['apply_strategy_weights']=False
-            self.v_weights_df, _, _, _, _, _ = compute_optimized_markowitz_d_w_m(st_tickers_returns, v_settings)
+            self.v_weights_df, _, _, _, _, _ = compute_optimized_markowitz_d_w_m(st_tickers_returns, settings)
             self.weights_df = self.v_weights_df.copy()
 
 

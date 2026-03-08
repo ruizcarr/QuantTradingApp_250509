@@ -45,13 +45,13 @@ class Data_Ind_Feed:
 
 
         # Get Data Instance
-        data=Data(settings,settings['tickers'],settings['start'],settings['end'],settings['add_days'],settings['offline'])
+        self.data=Data(settings,settings['tickers'],settings['start'],settings['end'],settings['add_days'],settings['offline'])
 
         #Get Indicators Instance
-        ind=Indicators(data.tickers_returns,settings)
+        self.ind=Indicators(self.data,settings)
 
         #Get Data , Indicators Dict tuple
-        self.data_ind=(data,ind.indicators_dict)
+        self.data_ind=(self.data,self.ind.indicators_dict)
 
 class Data:
     def __init__(self, settings, tickers=['ES=F'], start='2003-12-01',
@@ -141,10 +141,11 @@ class Data:
         # -----------------------------
         # 6️⃣ Add Cash (EURIBOR)
         # -----------------------------
+        self.euribor_df = get_euribor_1y_daily().reindex(self.tickers_closes.index, method="ffill")
+        self.cash_closes=pd.DataFrame()
+        self.cash_closes['cash'] = 1000 * (1 + self.euribor_df['Euribor'] / 255).cumprod()
         if settings.get('add_cash', False):
-            euribor_df = get_euribor_1y_daily().reindex(self.tickers_closes.index, method="ffill")
-            self.tickers_closes['cash'] = 1000 * (1 + euribor_df['Euribor'] / 255).cumprod()
-
+            self.tickers_closes['cash'] = self.cash_closes.copy()
 
             # Add cash to data_dict
             df_cash = list(self.data_dict.values())[0].copy()
@@ -893,10 +894,16 @@ def replace_fut_by_cash_returns_at_q_exp_or_after_dates(tickers_returns, fut_cas
 
 class Indicators:
 
-    def __init__(self,tickers_returns,settings):
+    def __init__(self,data,settings):
+
+        tickers_returns = data.tickers_returns
+        cash_returns=data.cash_closes.pct_change().fillna(0)
+
+
 
         #Get cumulated returns
         self.cum_ret = (1 + tickers_returns).cumprod()
+
 
         # Rolling CAGR
         #cagr = tickers_returns.rolling(252).mean() * 252
@@ -997,18 +1004,23 @@ class Indicators:
         #Euribor Indicator Weights
         from EuriborCorrStudy import get_Euribor_ind
         # Retrieve Training model and get Euribor Ind
-        if 'cash' in tickers_returns.columns:
-            Euribor_series = tickers_returns['cash'] * 255 * 100
-            self.Euribor_ind = get_Euribor_ind(Euribor_series)
+
+        Euribor_series = cash_returns['cash'] * 255 * 100
+        self.Euribor_ind = get_Euribor_ind(Euribor_series)
+
+        #if 'cash' in tickers_returns.columns:
+        #    Euribor_series = tickers_returns['cash'] * 255 * 100
+        #    self.Euribor_ind = get_Euribor_ind(Euribor_series)
+
 
         #RSI Curve weight
         #from RSIstudy import get_rsi_curve_weight
         #self.rsi_curve_weight = get_rsi_curve_weight(tickers_returns)
 
         # Combined Weights
-        self.comb_weights =   self.rsi_reverse_keep_weights *self.norm_weights  #+ self.rsi_curve_weight #  * self.exp_weights * self.rsi_sigmoid_weight * m_trend_weights #* trend_corr_high#  * rsi_weights * chopp_factor #* boll_pct_weights
+        self.comb_weights =   self.rsi_reverse_keep_weights *self.norm_weights*self.Euribor_ind  #+ self.rsi_curve_weight #  * self.exp_weights * self.rsi_sigmoid_weight * m_trend_weights #* trend_corr_high#  * rsi_weights * chopp_factor #* boll_pct_weights
         if 'cash' in tickers_returns.columns:
-            self.comb_weights =self.comb_weights*self.Euribor_ind
+            self.comb_weights =self.comb_weights.copy()
 
         # Softed Factor
         raw_weight_pct =settings['raw_weight_pct']

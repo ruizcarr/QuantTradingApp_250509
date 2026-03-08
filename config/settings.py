@@ -16,11 +16,11 @@ settings={
     'end':  (date.today() + timedelta(days=1)).isoformat(),  #'2023-04-01',# '2023-01-18',# '2004-01-18',#
     'add_days': 5,  # Additional Business days for next days position estimation
     'contango': {'ES=F': 1.85, 'NQ=F': 2.35, 'GC=F': 20.0, 'CL=F': 1.64, 'EURUSD=X': 1.00, 'BTC-USD': 0,'cash':0},#Yearly Contango % -  Dif beetween Cash and next Future value 'GC=F': 6.26
-    'add_cash':True,
+    'add_cash':False,
 
     #Settings for Portfolio Optimization
     #'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.3)}, #
-    'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.3)}, #
+    'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.0)}, #
     'volatility_target': 0.11,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115
 
     #Settings for Cash Back Test
@@ -68,7 +68,7 @@ settings={
     'apply_after_test_opt': False,  # Calculate After Test Optimization
 
 
-    # Parameters Markowitz
+    # Parameters Markowitz Vectorized
     'mkwtz_scipy': False,  # Get Scipy Calculated optimal weights
     'mkwtz_vectorized': True,  # Get Vectorized Calculated results
     'cov_w': 10, #10  # Optimized Windows in n - days
@@ -89,7 +89,7 @@ settings={
     'mean_weights_d_w_m':[3.0 , 1 , 0], #dayly, weekly, monthly weights
     'apply_utility_factor': True,
 
-    #Params for DDN Limited Portfolio
+    #Params for CAGR Portfolio DDN Limited
     'ddn_ltd_portfolio': True,
     'ddn_w': 30, #30 #22
     'ddn_std_w': 10, #10 #22
@@ -98,7 +98,7 @@ settings={
     'd_max_asset_weight': 0.20,  #0.20 # beffore mult
     'd_risky_tickers': ['BTC-USD'],
     'd_max_risky_tickers_weight': 0.10,
-    'd_excluded_tickers': [ 'ES=F','CL=F','EURUSD=X'],
+    'd_excluded_tickers': [ 'ES=F','CL=F','EURUSD=X','cash'],
     'd_fix_mult': 1.0, #1.6
     'd_max_total_leverage': 1.0,
 
