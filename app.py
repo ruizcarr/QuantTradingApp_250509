@@ -247,9 +247,9 @@ def display_portfolio_positions(eod_log_history, trading_history, last_trade_dat
         # st.divider()
         if euribor_rate > MIN_EURIBOR:
             cash_pct = cash_eur / porfolio_value_today_eur * 100
-            st.write(f"💰 **Cash (Euribor {euribor_rate:.2%}):** {cash_eur:,.0f} € | {cash_pct:.0f} %")
+            st.write(f"💰 **CASH @ Euribor {euribor_rate:.2%}: {cash_eur:,.0f} € | {cash_pct:.0f} %**")
         else:
-            st.write(f"💰 **Cash:** In bank account (Euribor {euribor_rate:.2%} below threshold)")
+            st.write(f"💰 **CASH:** In bank account (Euribor {euribor_rate:.2%} below threshold)")
 
     for i, ticker in enumerate(futures_tickers):
         label  = f"**{ticker}**"
