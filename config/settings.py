@@ -98,7 +98,7 @@ settings={
     'd_max_asset_weight': 0.20,  #0.20 # beffore mult
     'd_risky_tickers': ['BTC-USD'],
     'd_max_risky_tickers_weight': 0.10,
-    'd_excluded_tickers': [ 'ES=F','CL=F','EURUSD=X','cash'],
+    'd_excluded_tickers': [ 'ES=F','CL=F','EURUSD=X'],
     'd_fix_mult': 1.0, #1.6
     'd_max_total_leverage': 1.0,
 

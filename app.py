@@ -126,8 +126,14 @@ def main(settings):
 
         #Display Portfolio Positions
         last_trade_date=trading_history.index[trading_history.index.to_series().dt.date<=today][-1]
-        exchange_rate=display_portfolio_positions(eod_log_history,trading_history,last_trade_date,settings,ret_by_ticker,returns,closes_today,today,daysback=st.session_state.daysback)
 
+        # Last trade
+        exchange_rate = display_portfolio_positions(
+            eod_log_history, trading_history, last_trade_date, settings,
+            ret_by_ticker, returns, closes_today, today,
+            daysback=st.session_state.daysback,
+            bt_log_dict=bt_log_dict  # ← add this
+        )
         #Display Orders
         display_orders(log_history,settings)
 
@@ -143,8 +149,12 @@ def main(settings):
             if not next_trade_date:
                 st.write(f"**Keep Current Positions. No Trading Forecast within {settings['add_days']} Days**")
             else:
-                exchange_rate=display_portfolio_positions(eod_log_history,trading_history,next_trade_date,settings,ret_by_ticker,returns,closes_today,today,forecast=True)
-
+                exchange_rate = display_portfolio_positions(
+                    eod_log_history, trading_history, last_trade_date, settings,
+                    ret_by_ticker, returns, closes_today, today,
+                    daysback=st.session_state.daysback,
+                    bt_log_dict=bt_log_dict  # ← add this
+                )
         #Display Current Portfolio Value
         display_portfolio_results(eod_log_history,settings,daysback=st.session_state.daysback)
 
@@ -189,72 +199,83 @@ def get_daysback():
     chart_len_dict = {'Weekly': 6, 'Monthly': 23, 'Quarterly': 67}
     st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
 
-def display_portfolio_positions(eod_log_history,trading_history,date,settings,ret_by_ticker,returns,closes_today,today,daysback=3*22+1,forecast=False):
+def display_portfolio_positions(eod_log_history, trading_history, last_trade_date, settings, ret_by_ticker, returns, closes_today, today, daysback=3*22+1, forecast=False, bt_log_dict=None):
 
     st.write(f"**Portfolio Positions:**")
 
-    #Get tickers
-    tickers=returns.columns
+    # Get tickers — exclude cash from main loop
+    tickers = returns.columns
+    futures_tickers = [t for t in tickers if t != 'cash']
 
-    #Get portfolio and trading of today
+    # Get portfolio and trading of today
     last_portfolio = eod_log_history.loc[:today].iloc[-1][tickers]
-    pre_portfolio = eod_log_history.loc[:today].iloc[-2][tickers]
-    last_trade = last_portfolio-pre_portfolio
+    pre_portfolio  = eod_log_history.loc[:today].iloc[-2][tickers]
+    last_trade     = last_portfolio - pre_portfolio
 
-    #Position & Portfolio Value at end of Today in USD and EUR
-
-    pos_value_today=eod_log_history.loc[:today,'pos_value'].iloc[-1]
-    #porfolio_value_today = eod_log_history.loc[:today, 'portfolio_value'].iloc[-1]
+    # Position & Portfolio Value
+    pos_value_today     = eod_log_history.loc[:today, 'pos_value'].iloc[-1]
     porfolio_value_today_eur = eod_log_history.loc[:today, 'portfolio_value_eur'].iloc[-1]
+    exchange_rate       = eod_log_history.loc[:today, 'exchange_rate'].iloc[-1]
+    pos_value_today_eur = pos_value_today * exchange_rate
+    exposition          = pos_value_today_eur / porfolio_value_today_eur * 100
 
-    exchange_rate=eod_log_history.loc[:today, 'exchange_rate'].iloc[-1]
-    pos_value_today_eur=pos_value_today*exchange_rate
-    exposition = pos_value_today_eur / porfolio_value_today_eur * 100
+    # Cash info from bt_log_dict
+    MIN_EURIBOR = 0.001
+    cash_eur = 0.0
+    euribor_rate = 0.0
+    if bt_log_dict is not None and 'cash_eur' in bt_log_dict:
+        from Market_Data_Feed import get_euribor_1y_daily
+        euribor_df   = get_euribor_1y_daily()
+        euribor_rate = euribor_df['Euribor'].iloc[-1]
+        if euribor_rate > MIN_EURIBOR:
+            cash_eur_series = bt_log_dict['cash_eur']
+            eod_cash = cash_eur_series[cash_eur_series.index.date <= today]
+            cash_eur = float(eod_cash.iloc[-1])
 
-    #Display Current Portfolio
-    #n_col=len(settings["tickers"])+1
-    n_col = len(tickers) + 1
-    #col_width_list=[2]+[1]*(n_col-1)
+    # Display layout — futures tickers only
+    n_col = len(futures_tickers) + 1
     col_width_list = [7] + [3] * (n_col - 1)
-    cols=st.columns(col_width_list)
+    cols = st.columns(col_width_list)
 
     with cols[0]:
         st.write("Tickers:")
         st.write("Nbr of Contracts:")
-        st.write(f"Last Trade date: {date}")
+        st.write(f"Last Trade date: {last_trade_date}")
         st.write(f"Position Value | Exposition @: {today}")
-        #st.subheader(f"{pos_value_today:,.0f} USD /  {exposition:,.0f} %")
-        st.subheader(f"{pos_value_today_eur:,.0f} € |  {exposition:,.0f} %")
+        st.subheader(f"{pos_value_today_eur:,.0f} € | {exposition:,.0f} %")
 
-    for i in range(1,n_col):
-        j=i-1
-        ticker=trading_history.columns[j]
-        label=f"**{ticker}**"
-        nc=int(last_portfolio[j])
-        delta_nc=int(last_trade[j])
-        cols[i].metric(label=label,value=nc,delta=delta_nc)
-        with cols[i]:
-            pos_value_today_eur_by_ticker=closes_today[ticker]*nc*exchange_rate*settings['mults'][ticker]
+    for i, ticker in enumerate(futures_tickers):
+        label  = f"**{ticker}**"
+        nc     = int(last_portfolio[ticker])
+        delta_nc = int(last_trade[ticker])
+        cols[i + 1].metric(label=label, value=nc, delta=delta_nc)
+
+        with cols[i + 1]:
+            pos_value_today_eur_by_ticker = closes_today[ticker] * nc * exchange_rate * settings['mults'][ticker]
             pos_pct_by_ticker = pos_value_today_eur_by_ticker / porfolio_value_today_eur * 100
             st.write(f"{pos_value_today_eur_by_ticker:,.0f} € | {pos_pct_by_ticker:,.0f} %")
 
-        #Chart weights evolution
-
-        with cols[i]:
-            w=daysback #3*22
+        with cols[i + 1]:
+            w = daysback
             if daysback > 6:
                 chart_ts_altair(eod_log_history.iloc[-w:].loc[:today], ticker)
 
             if not forecast:
                 cum_ret_by_ticker = (1 + ret_by_ticker.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
-                #cum_ret_by_ticker = cum_ret_by_ticker.fillna(1)
                 cum_ret = (1 + returns.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
-                alt_chart1=chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
-                alt_chart2 = chart_ts_altair(cum_ret,  ticker, color="grey", st_altair_chart=False)
+                alt_chart1 = chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
+                alt_chart2 = chart_ts_altair(cum_ret, ticker, color="grey", st_altair_chart=False)
                 st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
 
-    return exchange_rate
+    # Cash line below positions
+    st.divider()
+    if euribor_rate > MIN_EURIBOR:
+        cash_pct = cash_eur / porfolio_value_today_eur * 100
+        st.write(f"💰 **Cash (Euribor {euribor_rate:.2%}):** {cash_eur:,.0f} € | {cash_pct:.0f} %")
+    else:
+        st.write(f"💰 **Cash:** In bank account (Euribor {euribor_rate:.2%} below threshold)")
 
+    return exchange_rate
 
 def display_portfolio_results(eod_log_history, settings, daysback=3*22):
     st.write("**Portfolio Results:**")
