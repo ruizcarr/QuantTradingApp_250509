@@ -268,7 +268,7 @@ def display_portfolio_positions(eod_log_history, trading_history, last_trade_dat
                 st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
 
     # Cash line below positions
-    st.divider()
+    #st.divider()
     if euribor_rate > MIN_EURIBOR:
         cash_pct = cash_eur / porfolio_value_today_eur * 100
         st.write(f"💰 **Cash (Euribor {euribor_rate:.2%}):** {cash_eur:,.0f} € | {cash_pct:.0f} %")
