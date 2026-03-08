@@ -212,6 +212,7 @@ def display_portfolio_positions(eod_log_history, trading_history, last_trade_dat
     tickers= settings['trading_tickers']
     #futures_tickers = [t for t in tickers if t != 'cash']
     futures_tickers = settings['trading_tickers']
+    st.write(futures_tickers)
 
     # Get portfolio and trading of today
     last_portfolio = eod_log_history.loc[:today].iloc[-1][tickers]
