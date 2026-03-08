@@ -31,6 +31,13 @@ import copy
 settings['verbose'] = False
 settings['qstats'] = False  # st.session_state.qstats
 # settings['do_BT'] = True
+# Get tickers — exclude cash and zero-bounded tickers from main loop
+tickers_bounds = settings.get('tickers_bounds', {})
+settings['trading_tickers'] = [
+    t for t in settings['tickers']
+    if t != 'cash'
+    and not (tickers_bounds.get(t, (0, 1)) == (0.0, 0.0) or tickers_bounds.get(t, (0, 1)) == (0, 0))
+]
 
 local_settings = copy.deepcopy(settings)
 
@@ -66,10 +73,6 @@ def main(settings):
         if "last_refresh" not in st.session_state:
             st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
 
-
-
-
-
         #Debug
         #st.write("Before Load & Compute: settings end last date", settings["end"])
 
@@ -82,7 +85,8 @@ def main(settings):
         closes = data.tickers_closes
         intraday_tickers_returns=data.intraday_tickers_returns
 
-        tickers=returns.columns
+        #tickers=returns.columns
+        tickers= settings['trading_tickers']
 
         # cash exception
         if 'cash' in intraday_tickers_returns.columns:
@@ -204,8 +208,10 @@ def display_portfolio_positions(eod_log_history, trading_history, last_trade_dat
     st.write(f"**Portfolio Positions:**")
 
     # Get tickers — exclude cash from main loop
-    tickers = returns.columns
-    futures_tickers = [t for t in tickers if t != 'cash']
+    #tickers = returns.columns
+    tickers= settings['trading_tickers']
+    #futures_tickers = [t for t in tickers if t != 'cash']
+    futures_tickers = settings['trading_tickers']
 
     # Get portfolio and trading of today
     last_portfolio = eod_log_history.loc[:today].iloc[-1][tickers]
@@ -329,7 +335,8 @@ def display_tickers_data(closes, returns, settings, sidebar=False, daysback=3*22
     Always shows today's data based on 'add_days', avoiding system datetime.
     """
     #tickers = settings["tickers"].copy()
-    tickers = closes.columns
+    #tickers = closes.columns
+    tickers= settings['trading_tickers']
     n_col = len(tickers) + 1
     col_width_list = [7] + [3] * (n_col - 1)
     cols = st.columns(col_width_list)
