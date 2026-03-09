@@ -183,10 +183,10 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
     # Cash
     lines.append("")
     cash_line = f"💰 <b>Cash:</b> {cash_info['eur']:,.0f}€ @ Euribor {cash_info['euribor']:.2%}"
-    lines.append(cash_line)
-    if cash_info['eur_change'] is not None:
-        change_icon = "📈" if cash_info['eur_change'] > 0 else "📉"
-        lines.append(f"   {change_icon} Change: {cash_info['eur_change']:+,.0f}€")
+    #lines.append(cash_line)
+    #if cash_info['eur_change'] is not None:
+    #    change_icon = "📈" if cash_info['eur_change'] > 0 else "📉"
+    #    lines.append(f"   {change_icon} Change: {cash_info['eur_change']:+,.0f}€")
 
     # Positions
     if positions_info:
