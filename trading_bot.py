@@ -215,7 +215,7 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
             lines.append(f"   {y_icon} Yearly:  {portfolio_info['yearly_change_pct']:+.2f}% | {portfolio_info['yearly_change_eur']:+,.0f}€")
 
     lines.append("")
-    lines.append("⚠️ Place orders manually with your broker.")
+    #lines.append("⚠️ Place orders manually with your broker.")
     lines.append(f"🚀 Open Trading App: {app_url}")
 
     return "\n".join(lines)
