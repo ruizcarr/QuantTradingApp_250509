@@ -83,7 +83,8 @@ def main(settings):
 
         returns = data.tickers_returns
         closes = data.tickers_closes
-        intraday_tickers_returns=data.intraday_tickers_returns
+        #intraday_tickers_returns=data.intraday_tickers_returns
+        intraday_tickers_returns = data.tickers_returns
 
         #tickers=returns.columns
         tickers= settings['trading_tickers']
