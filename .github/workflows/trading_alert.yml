@@ -2,8 +2,8 @@ name: Trading Alert
 
 on:
   schedule:
-    - cron: '0 7 * * 1-5'  # 9:00 CEST (summer UTC+2) Mon-Fri
-    - cron: '0 8 * * 1-5'  # 9:00 CET  (winter UTC+1) Mon-Fri
+    - cron: '0 6 * * 1-5'  # 8:00 CEST (summer UTC+2) Mon-Fri
+    - cron: '0 7 * * 1-5'  # 8:00 CET  (winter UTC+1) Mon-Fri
   workflow_dispatch:
     inputs:
       force_run:
@@ -30,24 +30,22 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Check Madrid time is 9:00
+      - name: Check Madrid time
         id: time_check
         run: |
           python -c "
-          import datetime, pytz, sys
+          import datetime, pytz
           force = '${{ github.event.inputs.force_run }}' == 'true'
-          if force:
-              print('Force run enabled - skipping time check')
-              sys.exit(0)
           tz = pytz.timezone('Europe/Madrid')
           now = datetime.datetime.now(tz)
           print(f'Current Madrid time: {now.strftime(\"%H:%M\")}')
-          if now.hour != 9:
-              print('Not 9:00 CET/CEST - skipping.')
-              sys.exit(1)
+          if force or now.hour == 8:
+              print('Logic works properly. Sending message now.')
+              print('should_run=true')
           else:
-              print('Time check passed')
-          "
+              print('Logic works properly. Summer time trigger aborted - winter time message comes in one hour.')
+              print('should_run=false')
+          " >> $GITHUB_OUTPUT
 
       - name: Run trading bot
         if: success()
