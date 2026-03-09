@@ -55,10 +55,10 @@ def run(settings):
     }
 
     # Train models and save in 'trained_models'
-    features, target_week = train_models(tickers_returns, lookbacks, model_path="trained_models")
+    features, target_week = train_models(tickers_returns, lookbacks, model_path="../trained_models")
 
     # Load models from 'trained_models' and predict next-week returns
-    pred_next_week = predict_next_week(tickers_returns, lookbacks, model_path="trained_models")
+    pred_next_week = predict_next_week(tickers_returns, lookbacks, model_path="../trained_models")
 
     print(pred_next_week)
 

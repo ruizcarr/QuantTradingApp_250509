@@ -11,14 +11,11 @@ import ta  # Make sure you have installed the 'ta' library (pip install ta)
 from ta.volatility import BollingerBands
 from ta.momentum import rsi # Import the specific rsi function
 
-import matplotlib.pyplot as plt
-from scipy.optimize import minimize
 from scipy import stats
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
 import yfinance as yf
-import itertools
 #import quantstats as qs
 # extend pandas functionality with mettickers, etc.
 #qs.extend_pandas()
@@ -27,11 +24,8 @@ from sklearn.metrics import r2_score
 import time
 import random
 
-from Interest_Rates_Download import get_euribor_1y_daily,get_fed_1year_treasury_yield_daily
+from Interest_Rates_Download import get_euribor_1y_daily
 from utils import sigmoid
-
-import webbrowser
-
 
 # Wider print limits
 pd.set_option('display.max_columns', None)
@@ -1002,7 +996,7 @@ class Indicators:
         self.rsi_sigmoid_weight=self.rsi_sigmoid(self.rsi)
 
         #Euribor Indicator Weights
-        from EuriborCorrStudy import get_Euribor_ind
+        from Bin.EuriborCorrStudy import get_Euribor_ind
         # Retrieve Training model and get Euribor Ind
 
         Euribor_series = cash_returns['cash'] * 255 * 100
