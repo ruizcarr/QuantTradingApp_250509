@@ -98,6 +98,8 @@ class Backtest:
         er_arr = exchange_rate.values.astype(np.float64)
         euribor_arr = euribor.values.astype(np.float64)
 
+        upgrade_eligible = np.array([t in ETF_TICKERS for t in tickers_list])
+
         for day in range(1, n_days):
 
             prev_pos = positions[day - 1].copy()
@@ -119,10 +121,8 @@ class Backtest:
 
             # ── Target size ───────────────────────────────────────────────
             target_size_raw = wda[day] * effective_pti
-            mask_upgrade = target_size_raw > self.settings.upgrade_threshold
-            target_size_raw = np.where(mask_upgrade,
-                                       np.maximum(target_size_raw, 1.0),
-                                       target_size_raw)
+            mask_upgrade = (target_size_raw > self.settings.upgrade_threshold) & (target_size_raw < 2.0) #& upgrade_eligible
+            target_size_raw = np.where(mask_upgrade, np.maximum(target_size_raw, 1.0), target_size_raw)
             target_size = np.round(target_size_raw).astype(np.int32)
             target_size = np.clip(target_size, 0, max_n_contracts)
 
@@ -700,22 +700,6 @@ def plot_portfolio_composition(bt_log_dict, closes, exchange_rate, settings):
     plt.xticks(rotation=45)
     plt.tight_layout()
 
-    # Check 2005-01-03 specifically
-    check_date = '2005-01-03'
-    d = pd.Timestamp(check_date)
-    idx = pos.index.get_indexer([d], method='ffill')[0]
-
-    print(f"\n--- {check_date} ---")
-    print(f"Portfolio EUR: {portfolio_eur.iloc[idx]:,.0f}€")
-    print(f"ER: {er.iloc[idx]:.4f}")
-    for ticker in futures_tickers:
-        if ticker in closes.columns:
-            n = int(pos[ticker].iloc[idx])
-            price = closes[ticker].iloc[idx]
-            mult = settings['mults'].get(ticker, 1)
-            ap_price = price * mult
-            notional = n * ap_price * er.iloc[idx]
-            print(f"  {ticker}: {n} contracts | price={price:.2f} | mult={mult} | ap={ap_price:.2f} | notional={notional:,.0f}€")
 
 
 
