@@ -33,10 +33,10 @@ settings['qstats'] = False  # st.session_state.qstats
 # settings['do_BT'] = True
 # Get tickers — exclude cash and zero-bounded tickers from main loop
 tickers_bounds = settings.get('tickers_bounds', {})
-settings['trading_tickers'] = [
+settings['trading_tickers'] =[
     t for t in settings['tickers']
-    if t != 'cash'
-    and not (tickers_bounds.get(t, (0, 1)) == (0.0, 0.0) or tickers_bounds.get(t, (0, 1)) == (0, 0))
+    if not (abs(tickers_bounds.get(t, (0, 1))[0]) == 0.0
+            and abs(tickers_bounds.get(t, (0, 1))[1]) == 0.0)
 ]
 
 local_settings = copy.deepcopy(settings)
