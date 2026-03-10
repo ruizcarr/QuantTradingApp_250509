@@ -93,6 +93,7 @@ class Backtest:
         cl = closes.values.astype(np.float64)
         wda = weights_div_asset_price.values.astype(np.float64)
         bt_arr = buy_trigger.values.astype(bool)
+        st_arr = sell_trigger.values.astype(bool)
         bsp_arr = buy_stop_price.values.astype(np.float64)
         ssp_arr = sell_stop_price.values.astype(np.float64)
         er_arr = exchange_rate.values.astype(np.float64)
@@ -135,18 +136,21 @@ class Backtest:
 
             # ── Order logic ───────────────────────────────────────────────
             is_buy = (target_trade > 0) & exposition_ok & bt_arr[day]
-            is_sell = (target_trade < 0)
+            is_sell = (target_trade < 0) & st_arr[day]
 
-            if not self.settings.buy_at_market:
-                buy_price = np.clip(bsp_arr[day], op[day], None)
-            else:
-                buy_price = op[day].copy()
+            #Order Sent to Broker with Stop prices
+            sent_order_price=np.where(is_buy, bsp_arr[day],
+                                   np.where(is_sell, ssp_arr[day], 0.0))
 
+            # ── Execution ─────────────────────────────────────────────────
+
+            #Open price filtered
+            buy_price = np.clip(bsp_arr[day], op[day], None)
             sell_price = np.clip(ssp_arr[day], None, op[day])
             order_price = np.where(is_buy, buy_price,
                                    np.where(is_sell, sell_price, 0.0))
 
-            # ── Execution ─────────────────────────────────────────────────
+
             in_range = (order_price >= lo[day]) & (order_price <= hi[day])
             executed = (is_buy | is_sell) & in_range
 
@@ -217,7 +221,8 @@ class Backtest:
                         'B_S': bs,
                         'exectype': etype,
                         'size': int(target_trade[t_idx]),
-                        'price': round(float(order_price[t_idx]), 3),
+                        #'price': round(float(order_price[t_idx]), 3),
+                        'price': round(float(sent_order_price[t_idx]), 3),
                         'pos': int(prev_pos[t_idx]),
                         'commision': 0.0,
                     })
@@ -426,17 +431,20 @@ def compute_buy_sell_triggers(weights, opens, closes, lows, highs):
     weights_up  = weights.ge(weights_min, axis=0)
 
     weights_max = weights.shift(1).rolling(5).max()
-    weights_dn  = weights.lt(weights_max, axis=0)
+    weights_dn  = weights.le(weights_max, axis=0)
 
-    sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=6)
-    lows_up = lows.ge(sell_stop_price, axis=0)
 
-    highs_max = highs.shift(1).rolling(5).max()
-    highs_dn  = highs.le(highs_max, axis=0)
+    lows_up_threshold=compute_sell_volat_stop_price(closes, lows, delta=7) #6
+    lows_up = lows.shift(1).ge(lows_up_threshold, axis=0)
+
+
+    highs_max = highs.shift(2).rolling(5).max()*1.005
+    highs_dn  = highs.shift(1).le(highs_max, axis=0)
 
     buy_trigger  = weights_up & lows_up
     sell_trigger = highs_dn & weights_dn
 
+    sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=3)  # 6
     buy_stop_price = compute_buy_volat_stop_price(closes, highs, delta=1)
 
     debug = False
@@ -574,10 +582,8 @@ def compute_sell_volat_stop_price(closes, lows, delta=6):
     roll_std  = downside_noise.rolling(20, min_periods=1).std().fillna(0)
 
     volat_buffer = roll_mean + delta * roll_std
-    volat_buffer = volat_buffer.clip(
-        lower=0.0001 * closes.shift(1),
-        upper=0.12   * closes.shift(1)
-    )
+    volat_buffer = volat_buffer.clip(lower=0.0001 * closes.shift(1),upper=0.12   * closes.shift(1))
+    (volat_buffer / closes.shift(1)).plot(title='sell volat_buffer pct')
 
     volat_stop_price = closes.shift(1) - volat_buffer
     volat_stop_price = volat_stop_price.rolling(22, min_periods=1).max()
@@ -593,6 +599,8 @@ def compute_buy_volat_stop_price(closes, highs, delta=1):
     roll_std  = upside_noise.rolling(20, min_periods=1).std().fillna(0)
 
     volat_buffer     = roll_mean + delta * roll_std
+    volat_buffer = volat_buffer.clip(lower=0.0001 * closes.shift(1), upper=0.12 * closes.shift(1))
+    (volat_buffer/closes.shift(1)).plot(title='buy volat_buffer pct')
     volat_stop_price = closes.shift(1) + volat_buffer
     volat_stop_price = volat_stop_price.rolling(22, min_periods=1).min()
     volat_stop_price = volat_stop_price.replace(0, np.nan).bfill().fillna(0)
