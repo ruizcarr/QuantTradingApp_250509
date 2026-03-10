@@ -50,9 +50,13 @@ class DDNLimitedPortfolio:
         # 3. CAGR Utility (Arithmetic mean based on window)
         cagr = tickers_returns.rolling(s['d_cagr_w']).mean() * 252
         #self.utility = cagr.clip(lower=0, upper=1)
-
         cagr_fast=tickers_returns.rolling(22).mean() * 252
-        self.utility = (0.95*cagr+0.05*cagr_fast).clip(lower=0, upper=1)
+        returns=(0.95*cagr+0.05*cagr_fast)
+        #utility=1.25*returns -0.25*self.risk_metric
+
+        utility=returns.copy()
+
+        self.utility = utility.clip(lower=0, upper=1)
 
 
         # 4. Apply Penalty to Utility

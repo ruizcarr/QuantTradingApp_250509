@@ -38,14 +38,18 @@ jobs:
           force = '${{ github.event.inputs.force_run }}' == 'true'
           tz = pytz.timezone('Europe/Madrid')
           now = datetime.datetime.now(tz)
-          print(f'Current Madrid time: {now.strftime(\"%H:%M\")}')
+          time_str = now.strftime('%H:%M')
+          print('Current Madrid time: ' + time_str)
           if force or now.hour == 8:
               print('Logic works properly. Sending message now.')
-              print('should_run=true')
+              result = 'true'
           else:
-              print('Logic works properly. Summer time trigger aborted - winter time message comes in one hour.')
-              print('should_run=false')
-          " >> $GITHUB_OUTPUT
+              print('Logic works properly. Summer time trigger aborted.')
+              result = 'false'
+          import os
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('should_run=' + result + '\n')
+          "
 
       - name: Run trading bot
         if: success()
