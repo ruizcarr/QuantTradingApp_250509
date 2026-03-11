@@ -445,9 +445,9 @@ def compute_buy_sell_triggers(weights, opens, closes, lows, highs):
     sell_trigger = highs_dn & weights_dn
 
     sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=3)  # 6
-    buy_stop_price = compute_buy_volat_stop_price(closes, highs, delta=3.5) #4
+    buy_stop_price = compute_buy_volat_stop_price(closes, highs, delta=3.5) #3.5
 
-    debug = False
+    debug = True
     if debug:
         plot_df = pd.DataFrame()
         ticker = 'NQ=F'
@@ -603,7 +603,7 @@ def compute_buy_volat_stop_price(closes, highs, delta=1):
 
     volat_buffer     = roll_mean + delta * roll_std
     volat_buffer = volat_buffer.clip(lower=0.0001 * closes.shift(1), upper=0.12 * closes.shift(1))
-    (volat_buffer/closes.shift(1)).plot(title='buy volat_buffer pct')
+    #(volat_buffer/closes.shift(1)).plot(title='buy volat_buffer pct')
     volat_stop_price = closes.shift(1) + volat_buffer
     volat_stop_price = volat_stop_price.rolling(22, min_periods=1).min()
     volat_stop_price = volat_stop_price.replace(0, np.nan).bfill().fillna(0)
