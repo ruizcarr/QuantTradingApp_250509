@@ -40,6 +40,8 @@ def compute(settings,data_ind):
     data, indicators_dict = data_ind
     tickers_returns = data.tickers_returns
 
+    #print('tickers_returns',tickers_returns.tail(10))
+
     #data, indicators_dict =mdf.Data_Ind_Feed(settings).data_ind
 
     #data_dict=data.data_dict

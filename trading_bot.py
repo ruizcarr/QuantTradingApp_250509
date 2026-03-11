@@ -139,7 +139,7 @@ def calc_eur_amount(row, exchange_rate, settings):
 
 def format_orders_message(log_history, exchange_rate, cash_info, positions_info, portfolio_info, settings, app_url):
     orders_history = log_history[log_history['event'].str.contains('Created')]
-    orders_history = orders_history[orders_history['ticker'] != 'cash']
+    #orders_history = orders_history[orders_history['ticker'] != 'cash']
 
     today = datetime.date.today()
     tz = pytz.timezone('Europe/Madrid')
@@ -176,7 +176,7 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
     if len(orders_ahead) > 0:
         next_day = orders_ahead['date'].iloc[0]
         next_orders = orders_ahead[orders_ahead['date'] == next_day]
-        format_order_block(next_orders, f"<b>Upcoming Orders</b>\n🕒 {next_day} 00:00")
+        format_order_block(next_orders, f"<b>Upcoming Orders Forecast</b>\n🕒 {next_day} 00:00")
     else:
         lines.append("<b>Upcoming Orders</b>\nNo upcoming orders.")
 
@@ -222,8 +222,8 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
 
 
 def main():
-    token   = os.environ["TELEGRAM_TOKEN"]
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
+    #token   = os.environ["TELEGRAM_TOKEN"]
+    #chat_id = os.environ["TELEGRAM_CHAT_ID"]
     app_url = "https://quanttradingapp.streamlit.app"
 
     try:
