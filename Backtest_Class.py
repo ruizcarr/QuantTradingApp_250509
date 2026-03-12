@@ -91,6 +91,7 @@ class Backtest:
         hi = highs.values.astype(np.float64)
         lo = lows.values.astype(np.float64)
         cl = closes.values.astype(np.float64)
+
         wda = weights_div_asset_price.values.astype(np.float64)
         bt_arr = buy_trigger.values.astype(bool)
         st_arr = sell_trigger.values.astype(bool)
@@ -98,8 +99,6 @@ class Backtest:
         ssp_arr = sell_stop_price.values.astype(np.float64)
         er_arr = exchange_rate.values.astype(np.float64)
         euribor_arr = euribor.values.astype(np.float64)
-
-        upgrade_eligible = np.array([t in ETF_TICKERS for t in tickers_list])
 
         for day in range(1, n_days):
 
@@ -127,14 +126,15 @@ class Backtest:
             target_size = np.round(target_size_raw).astype(np.int32)
             target_size = np.clip(target_size, 0, max_n_contracts)
 
+            target_trade = target_size - prev_pos
+
             # ── Exposition guard ──────────────────────────────────────────
             target_pos_value = (ap[day] * target_size).sum()
             targeted_exposition = target_pos_value / effective_pti
             exposition_ok = targeted_exposition < exposition_lim
 
-            target_trade = target_size - prev_pos
-
             # ── Order logic ───────────────────────────────────────────────
+
             is_buy = (target_trade > 0) & exposition_ok & bt_arr[day]
             is_sell = (target_trade < 0) & st_arr[day]
 
