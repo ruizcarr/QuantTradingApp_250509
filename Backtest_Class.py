@@ -447,7 +447,7 @@ def compute_buy_sell_triggers(weights, opens, closes, lows, highs):
     sell_stop_price = compute_sell_volat_stop_price(closes, lows, delta=3)  # 6
     buy_stop_price = compute_buy_volat_stop_price(closes, highs, delta=3.5) #3.5
 
-    debug = True
+    debug = False
     if debug:
         plot_df = pd.DataFrame()
         ticker = 'NQ=F'

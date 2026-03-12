@@ -49,15 +49,14 @@ class DDNLimitedPortfolio:
 
         # 3. CAGR Utility (Arithmetic mean based on window)
         cagr = tickers_returns.rolling(s['d_cagr_w']).mean() * 252
-        #self.utility = cagr.clip(lower=0, upper=1)
         cagr_fast=tickers_returns.rolling(22).mean() * 252
-        returns=(0.95*cagr+0.05*cagr_fast)
-        #utility=1.25*returns -0.25*self.risk_metric
+        fast_k=0.05
+        returns=((1-fast_k)*cagr+fast_k*cagr_fast)
+        self.utility = returns.clip(lower=0, upper=1)
 
-        utility=returns.copy()
-
-        self.utility = utility.clip(lower=0, upper=1)
-
+        # How much faster is short-term vs long-term (ratio, not binary)
+        momentum_ratio = (cagr_fast / cagr.replace(0, np.nan)).fillna(0.75).clip(0.75, 1.20)
+        self.utility = self.utility * momentum_ratio
 
         # 4. Apply Penalty to Utility
         # Only penalize assets where the risk ratio > 1.0
