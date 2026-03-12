@@ -222,8 +222,8 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
 
 
 def main():
-    #token   = os.environ["TELEGRAM_TOKEN"]
-    #chat_id = os.environ["TELEGRAM_CHAT_ID"]
+    token   = os.environ["TELEGRAM_TOKEN"]
+    chat_id = os.environ["TELEGRAM_CHAT_ID"]
     app_url = "https://quanttradingapp.streamlit.app"
 
     try:
