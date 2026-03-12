@@ -2,8 +2,8 @@ name: Trading Alert
 
 on:
   schedule:
-    - cron: '0 6 * * 1-5'  # 8:00 CEST (summer UTC+2) Mon-Fri
-    - cron: '0 7 * * 1-5'  # 8:00 CET  (winter UTC+1) Mon-Fri
+    - cron: '0 19 * * 1-5'  # 21:00 CEST (summer UTC+2) Mon-Fri
+    - cron: '0 20 * * 1-5'  # 21:00 CET  (winter UTC+1) Mon-Fri
   workflow_dispatch:
     inputs:
       force_run:
@@ -40,7 +40,7 @@ jobs:
           now = datetime.datetime.now(tz)
           time_str = now.strftime('%H:%M')
           print('Current Madrid time: ' + time_str)
-          if force or now.hour == 8:
+          if force or now.hour == 21:
               print('Logic works properly. Sending message now.')
               result = 'true'
           else:
