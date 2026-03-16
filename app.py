@@ -60,9 +60,9 @@ def main(settings):
         st.set_page_config(layout="wide", page_title='Quant Trading App')
 
         # Initialize session_state values
-        chart_len_dict = {'Weekly': 5 + 1, 'Monthly': 22 + 1, 'Quarterly': 3 * 22 + 1}
+        chart_len_dict = {'Weekly': 5 + 1, 'Monthly': 22 + 1, 'Quarterly': 3 * 22 + 1,'HalfYear': 7 * 22 + 1}
         if 'chart_len_key' not in st.session_state:
-            st.session_state.chart_len_key = 'Quarterly'
+            st.session_state.chart_len_key = 'HalfYear' #'Quarterly'
         if 'daysback' not in st.session_state:
             #get_daysback()
             st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
@@ -201,7 +201,7 @@ def main(settings):
 #Define Functions
 
 def get_daysback():
-    chart_len_dict = {'Weekly': 6, 'Monthly': 23, 'Quarterly': 67}
+    chart_len_dict = {'Weekly': 6, 'Monthly': 23, 'Quarterly': 67,'HalfYear': 7 * 22 + 1}
     st.session_state.daysback = chart_len_dict[st.session_state.chart_len_key]
 
 def display_portfolio_positions(eod_log_history, trading_history, last_trade_date, settings, ret_by_ticker, returns, closes_today, today, daysback=3*22+1, forecast=False, bt_log_dict=None):
