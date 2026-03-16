@@ -98,9 +98,33 @@ settings={
     'd_max_asset_weight': 0.20,  #0.20 # beffore mult
     'd_risky_tickers': ['BTC-USD','EURUSD=X','CL=F'],
     'd_max_risky_tickers_weight': 0.10,
-    'd_excluded_tickers': [ 'ES=F'],
-    'd_fix_mult': 1.0, #1.6
-    'd_max_total_leverage': 1.0,
+    'd_excluded_tickers': [ 'ES=F'], #,'ES=F'
+    'd_fix_mult': 1.0, #1.0 1.6
+    'd_max_total_leverage': 1.0, #1.0
+
+    # --- Blend mode ---
+    'blend_metric': 'fixed',  # 'fixed' | 'cagr' | 'sharpe' | 'mean' | 'utility'
+
+# --- Per-source fixed factors (only used when blend_metric == 'fixed') ---
+    'scipy_blend_factor': 0.0,
+    'vectorized_blend_factor': 0.4, #0.4
+    'ddn_blend_factor': 0.6, #0.6
+
+# --- Rolling metric params (used for 'cagr', 'sharpe', 'mean') ---
+    'blend_window': 30,  # 22 lookback days
+    'blend_min_periods': 5,  # min days before rolling factors activate
+    'blend_lambda': 2.0,  # 0.65 vol penalty at utility=cagr-volatility*'blend_lambda']
+                                        #   < 1.0  → more return-seeking
+                                        #   1.0    → balanced
+                                        #   > 1.0  → more risk-averse
+                                        #   2.0    → standard mean-variance utility
+
+    'use_benchmark': True,
+    'benchmark_tickers': ['ES=F', 'NQ=F', 'GC=F'],
+    'benchmark_ticker_weights': {'ES=F': 0.0, 'NQ=F': 1, 'GC=F': 0.00},  # {'ES=F': 0.25, 'NQ=F': 0.45, 'GC=F': 0.30}custom split
+    'benchmark_vol_offset': 0.07,  # 0.07
+    'benchmark_weight_scale': 0.6,  # 0.80
+    'benchmark_fixed_factor': 0.0,  # only if blend_metric == 'fixed'
 
     # Default Settings
     'trading_app_only': False,
