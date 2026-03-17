@@ -39,7 +39,7 @@ settings={
     'w_lower_lim': -0.1,  # Individual Lower Weight Limit
      'w_min_lim' : 0.015,  # keep the value if |individual position| >= threshold, otherwise set to 0
     'pos_exp_factor': 0.90,#0.90 #1.05 # Position Exponential factor; positions = positions ** settings['pos_exp_factor']
-    'pos_mult_factor': 1.75, #1.75 #1.2, #1.5,#1.25, #1.15 # Position Multiplicative factor; positions = positions * settings['pos_mult_factor']
+    'pos_mult_factor': 1.80, #1.75 #1.2, #1.5,#1.25, #1.15 # Position Multiplicative factor; positions = positions * settings['pos_mult_factor']
     'apply_pos_constraints': True, #including volatility limited factor to avoid volatility peacks
 
     #Markowitz Windows Parameters [fast,mid,slow]
@@ -100,15 +100,15 @@ settings={
     'd_max_risky_tickers_weight': 0.10,
     'd_excluded_tickers': [ 'ES=F'], #,'ES=F'
     'd_fix_mult': 1.0, #1.0 1.6
-    'd_max_total_leverage': 1.0, #1.0
+    'd_max_total_leverage': 1.00, #1.0
 
     # --- Blend mode ---
     'blend_metric': 'fixed',  # 'fixed' | 'cagr' | 'sharpe' | 'mean' | 'utility'
 
 # --- Per-source fixed factors (only used when blend_metric == 'fixed') ---
     'scipy_blend_factor': 0.0,
-    'vectorized_blend_factor': 0.4, #0.4
-    'ddn_blend_factor': 0.6, #0.6
+    'vectorized_blend_factor': 0.35, #0.4
+    'ddn_blend_factor': 0.65, #0.6
 
 # --- Rolling metric params (used for 'cagr', 'sharpe', 'mean') ---
     'blend_window': 30,  # 22 lookback days
@@ -119,9 +119,9 @@ settings={
                                         #   > 1.0  → more risk-averse
                                         #   2.0    → standard mean-variance utility
 
-    'use_benchmark': True,
+    'use_benchmark': False,
     'benchmark_tickers': ['ES=F', 'NQ=F', 'GC=F'],
-    'benchmark_ticker_weights': {'ES=F': 0.0, 'NQ=F': 1, 'GC=F': 0.00},  # {'ES=F': 0.25, 'NQ=F': 0.45, 'GC=F': 0.30}custom split
+    'benchmark_ticker_weights': {'ES=F': 0.0, 'NQ=F': 0.5, 'GC=F': 0.5},  # {'ES=F': 0.25, 'NQ=F': 0.45, 'GC=F': 0.30}custom split
     'benchmark_vol_offset': 0.07,  # 0.07
     'benchmark_weight_scale': 0.6,  # 0.80
     'benchmark_fixed_factor': 0.0,  # only if blend_metric == 'fixed'

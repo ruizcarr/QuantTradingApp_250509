@@ -30,6 +30,30 @@ class Strategy:
     """
     def __init__(self,settings,st_tickers_returns,indicators_dict):
 
+        def trim_sources_to_common_start(sources: dict) -> dict:
+            """
+            Drop leading rows where any source has all-zero weights.
+            Returns sources trimmed to the first date where ALL sources
+            have at least one non-zero weight row.
+            """
+            first_valid = {}
+            for name, (w, factor) in sources.items():
+                # Find first row where any weight is non-zero
+                nonzero_mask = (w.abs() > 1e-8).any(axis=1)
+                if nonzero_mask.any():
+                    first_valid[name] = nonzero_mask.idxmax()
+                else:
+                    raise ValueError(f"Source '{name}' has no non-zero weights at all.")
+
+            # Use the latest of the first-valid dates across all sources
+            common_start = max(first_valid.values())
+            #print(f"[trim_sources] First valid dates per source: { {k: str(v.date()) for k, v in first_valid.items()} }")
+            #print(f"[trim_sources] Trimming to common start: {common_start.date()}")
+
+            return {
+                name: (w.loc[common_start:], factor)
+                for name, (w, factor) in sources.items()
+            }
 
         def compute_blend_factors(sources: dict, returns_df: pd.DataFrame, settings: dict) -> pd.DataFrame:
             """
@@ -128,7 +152,7 @@ class Strategy:
                 raise ValueError(f"Unknown blend_metric '{metric}'. Use 'cagr', 'sharpe', 'utility', 'mean' or 'fixed'.")
 
             # ------------------------------------------------------------------
-            # Clip negatives, normalize — no EWM smoothing
+            # Clip negatives, normalize
             # ------------------------------------------------------------------
             perf_df = perf_df.clip(lower=0)
             row_sums = perf_df.sum(axis=1).replace(0, np.nan)
@@ -231,7 +255,179 @@ class Strategy:
 
             return bmark_weights
 
+        def vol_normalize_weights(sources: dict, returns_df: pd.DataFrame, settings: dict) -> dict:
+            """
+            Scale each source's weights by volatility_target / rolling_vol of the implied portfolio.
+            Ensures all sources target the same vol level before blending.
+            Shift(1) applied to vol estimate — uses yesterday's vol to size today's weights.
 
+            Parameters
+            ----------
+            sources    : dict  name -> (weights_df, fixed_factor)
+            returns_df : pd.DataFrame  DatetimeIndex x tickers, daily returns
+            settings   : dict  expects:
+                             'volatility_target' : float  (default 0.11)
+                             'blend_window'      : int    (default 22)
+                             'ann_factor'        : int    (default 252)
+
+            Returns
+            -------
+            dict  same structure as sources, with vol-normalized weights_df
+            """
+            vol_target = settings.get('volatility_target', 0.11)
+            window = settings.get('blend_window', 22)
+            ann_factor = settings.get('ann_factor', 252)
+
+            normalized_sources = {}
+            for name, (w, factor) in sources.items():
+                # Implied daily portfolio return for this source
+                port_ret = (w * returns_df.reindex(w.index)).sum(axis=1)
+
+
+                # Rolling annualized vol — shift(1) to use yesterday's vol
+                rolling_vol = (
+                    port_ret
+                    .rolling(window, min_periods=1)
+                    .std()
+                    .mul(np.sqrt(ann_factor))
+                    .shift(1)
+                )
+
+                # Vol scalar: clip to [0, 1] — never leverage, only scale down
+                vol_scalar = (vol_target / rolling_vol.replace(0, np.nan)).fillna(1.0).clip(0, 1.0)
+
+
+                # Scale all ticker weights uniformly by scalar
+                w_normalized = w.multiply(vol_scalar, axis=0)
+
+                # Debug
+                # raw_volat_port_ret = port_ret.shift(1).std() * 16
+                # vol_scalar = vol_target / raw_volat_port_ret
+                #norm_port_ret = (w_normalized * returns_df).sum(axis=1)
+                #norm_volat_port_ret = norm_port_ret.std() * 16
+                #if name != 'benchmark':
+                #    print(name, 'Raw_Volat', raw_volat_port_ret.round(4),'Norm_Volat', norm_volat_port_ret.round(4))
+
+                normalized_sources[name] = (w_normalized, factor)
+
+            return normalized_sources
+
+        def plot_source_diagnostics(sources: dict, returns_df: pd.DataFrame, settings: dict):
+            """
+            Plot per-source diagnostics: cumulative returns, rolling vol, rolling CAGR.
+            Call after vol_normalize_weights to inspect normalized sources.
+
+            Parameters
+            ----------
+            sources    : dict  name -> (weights_df, fixed_factor)
+            returns_df : pd.DataFrame  DatetimeIndex x tickers, daily returns
+            settings   : dict  expects 'blend_window', 'ann_factor', 'blend_min_periods'
+            """
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+
+            window = settings.get('blend_window', 22)
+            min_periods = settings.get('blend_min_periods', window)
+            ann_factor = settings.get('ann_factor', 252)
+            lam = settings.get('blend_lambda', 0.65)
+
+            # ------------------------------------------------------------------
+            # Compute per-source portfolio returns (weights already lag-adjusted)
+            # ------------------------------------------------------------------
+            port_ret_df = pd.DataFrame({
+                name: (w.reindex(returns_df.index) * returns_df).sum(axis=1)
+                for name, (w, _) in sources.items()
+            })
+
+            # ------------------------------------------------------------------
+            # Derived series
+            # ------------------------------------------------------------------
+            cum_ret = (1 + port_ret_df).cumprod()
+
+            rolling_vol = (
+                port_ret_df
+                .rolling(window, min_periods=min_periods)
+                .std()
+                .mul(np.sqrt(ann_factor))
+            )
+
+            rolling_cagr = (
+                (1 + port_ret_df)
+                .rolling(window, min_periods=min_periods)
+                .apply(np.prod, raw=True)
+                .pow(ann_factor / window)
+                .sub(1)
+            )
+
+            rolling_utility = rolling_cagr - lam * rolling_vol
+
+            norm_factors = compute_blend_factors(sources, returns_df, settings)
+
+            # ------------------------------------------------------------------
+            # Plot
+            # ------------------------------------------------------------------
+            n_sources = len(sources)
+            fig, axes = plt.subplots(5, 1, figsize=(14, 20), sharex=True)
+            colors = plt.cm.tab10.colors
+
+            # --- 1. Cumulative returns ---
+            ax = axes[0]
+            for i, col in enumerate(cum_ret.columns):
+                ax.plot(cum_ret.index, cum_ret[col], label=col, color=colors[i % 10])
+            ax.set_title('Cumulative Returns per Source')
+            ax.set_ylabel('Cumulative Return')
+            ax.legend(loc='upper left', fontsize=8)
+            ax.grid(True, alpha=0.3)
+
+            # --- 2. Rolling volatility ---
+            ax = axes[1]
+            for i, col in enumerate(rolling_vol.columns):
+                ax.plot(rolling_vol.index, rolling_vol[col], label=col, color=colors[i % 10])
+            ax.axhline(settings.get('volatility_target', 0.11), color='red', linestyle='--',
+                       linewidth=1, label='vol_target')
+            ax.set_title(f'Rolling Annualized Volatility (window={window})')
+            ax.set_ylabel('Annualized Vol')
+            ax.legend(loc='upper left', fontsize=8)
+            ax.grid(True, alpha=0.3)
+
+            # --- 3. Rolling CAGR ---
+            ax = axes[2]
+            for i, col in enumerate(rolling_cagr.columns):
+                ax.plot(rolling_cagr.index, rolling_cagr[col], label=col, color=colors[i % 10])
+            ax.axhline(0, color='black', linestyle='--', linewidth=0.8)
+            ax.set_title(f'Rolling CAGR (window={window})')
+            ax.set_ylabel('Annualized CAGR')
+            ax.legend(loc='upper left', fontsize=8)
+            ax.grid(True, alpha=0.3)
+
+            # --- 4. Rolling utility ---
+            ax = axes[3]
+            for i, col in enumerate(rolling_utility.columns):
+                ax.plot(rolling_utility.index, rolling_utility[col], label=col, color=colors[i % 10])
+            ax.axhline(0, color='black', linestyle='--', linewidth=0.8)
+            ax.set_title(f'Rolling Utility = CAGR - {lam} * Vol (window={window})')
+            ax.set_ylabel('Utility')
+            ax.legend(loc='upper left', fontsize=8)
+            ax.grid(True, alpha=0.3)
+
+            # --- 5. Blend factors (norm_factors after shift) ---
+            ax = axes[4]
+            norm_factors_shifted = norm_factors.shift(1).fillna(1 / n_sources)
+            for i, col in enumerate(norm_factors_shifted.columns):
+                ax.plot(norm_factors_shifted.index, norm_factors_shifted[col],
+                        label=col, color=colors[i % 10])
+            ax.set_title(f'Blend Factors — metric={settings.get("blend_metric", "fixed")}')
+            ax.set_ylabel('Normalized Factor')
+            ax.set_ylim(0, 1)
+            ax.legend(loc='upper left', fontsize=8)
+            ax.grid(True, alpha=0.3)
+
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+            plt.xticks(rotation=45)
+
+            plt.suptitle('Source Diagnostics', fontsize=14, fontweight='bold', y=1.01)
+            plt.tight_layout()
         # ======================================================================
         # Main portfolio weight computation block — replaces your existing logic
         # ======================================================================
@@ -259,7 +455,22 @@ class Strategy:
         if settings.get('use_benchmark', False):
             bmark_weights = build_benchmark_weights(st_tickers_returns, settings)
             sources['benchmark'] = (bmark_weights, settings.get('benchmark_fixed_factor', 1.0))
-            #sources.update(build_benchmark_sources(st_tickers_returns, settings))
+
+        #Set comon start without zero weights
+        sources = trim_sources_to_common_start(sources)
+        common_start = next(iter(sources.values()))[0].index[0]
+        st_tickers_returns = st_tickers_returns.loc[common_start:]
+
+        # Before vol normalization — inspect raw sources
+        #plot_source_diagnostics(sources, st_tickers_returns, settings)
+
+        settings['vol_normalize_sources'] = False  # toggle on/off
+
+        if settings.get('vol_normalize_sources', True):
+            sources = vol_normalize_weights(sources, st_tickers_returns, settings)
+
+            # Before vol normalization — inspect raw sources
+            plot_source_diagnostics(sources, st_tickers_returns, settings)
 
         # Combine all active sources using fixed factors or rolling performance metric
         self.weights_df = combine_sources(sources, st_tickers_returns, settings)
