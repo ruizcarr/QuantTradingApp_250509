@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 
 
 #from Backtest_Vectorized import compute_backtest_vectorized
-from Markowitz_Vectorized import compute_optimized_markowitz_d_w_m
+from Markowitz_Vectorized import compute_optimized_markowitz_d_w
 from WalkForwardTraining import WalkForwardTraining
 import Market_Data_Feed as mdf
 from utils import mean_positions

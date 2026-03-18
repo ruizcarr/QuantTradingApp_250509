@@ -4,7 +4,7 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
-from Markowitz_Vectorized import compute_optimized_markowitz_d_w_m
+from Markowitz_Vectorized import compute_optimized_markowitz_d_w
 from utils import weighted_mean_of_dfs_dict, create_results_by_period_df,mean_positions
 from MarkowitzWeights import MarkowitzWeights
 
@@ -443,7 +443,7 @@ class Strategy:
             sources['scipy'] = (self.s_weights_df, settings.get('scipy_blend_factor', 1.0))
 
         if settings['mkwtz_vectorized']:
-            self.v_weights_df, *_ = compute_optimized_markowitz_d_w_m(st_tickers_returns, settings)
+            self.v_weights_df, *_ = compute_optimized_markowitz_d_w(st_tickers_returns, settings)
             sources['vectorized'] = (self.v_weights_df, settings.get('vectorized_blend_factor', 1.0))
 
         if settings['ddn_ltd_portfolio']:
@@ -489,7 +489,7 @@ class Strategy:
         if settings['mkwtz_vectorized']:
 
             #Get Markowitz_Vectorized weights
-            self.v_weights_df, _, _, _, _, _ = compute_optimized_markowitz_d_w_m(st_tickers_returns, settings)
+            self.v_weights_df, _, _, _, _, _ = compute_optimized_markowitz_d_w(st_tickers_returns, settings)
             self.weights_df = self.v_weights_df.copy()
 
 

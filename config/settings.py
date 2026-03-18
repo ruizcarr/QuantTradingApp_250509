@@ -38,8 +38,8 @@ settings={
     'w_upper_lim': 0.75,  #0.66, #1.0,  #0.9, #  Individual Upper Weight Limit
     'w_lower_lim': -0.1,  # Individual Lower Weight Limit
      'w_min_lim' : 0.015,  # keep the value if |individual position| >= threshold, otherwise set to 0
-    'pos_exp_factor': 0.90,#0.90 #1.05 # Position Exponential factor; positions = positions ** settings['pos_exp_factor']
-    'pos_mult_factor': 1.80, #1.75 #1.2, #1.5,#1.25, #1.15 # Position Multiplicative factor; positions = positions * settings['pos_mult_factor']
+    'pos_exp_factor': 0.95,#0.90 #1.05 # Position Exponential factor; positions = positions ** settings['pos_exp_factor']
+    'pos_mult_factor': 1.90, #1.75 #1.2, #1.5,#1.25, #1.15 # Position Multiplicative factor; positions = positions * settings['pos_mult_factor']
     'apply_pos_constraints': True, #including volatility limited factor to avoid volatility peacks
 
     #Markowitz Windows Parameters [fast,mid,slow]
@@ -72,21 +72,18 @@ settings={
     'mkwtz_scipy': False,  # Get Scipy Calculated optimal weights
     'mkwtz_vectorized': True,  # Get Vectorized Calculated results
     'cov_w': 10, #10  # Optimized Windows in n - days
-    'cagr_w': [160,250,390], #[20,160,250,390] # Optimized Windows in n - days
+    'cagr_w': [10,20,180,250,390], #[20,180,250,390] # Optimized Windows in n - days
     'param_to_loop': 'cagr_w',
     'strat_periods':  [
                 'dayly',
                'weekly',
-               #'monthly',
     ],
     #Weekly params. Window in n - weeks
     'cov_w_weekly': 15, #15
-    'cagr_w_weekly': [32, 50, 78] ,
-    # Monthly params. Window in n - months
-    'cov_w_monthly': 9,
-    'cagr_w_monthly': [9, 12],
+    'cagr_w_weekly': [32, 50, 78] , #[32, 50, 78]
     #Weights for mean
-    'mean_weights_d_w_m':[3.0 , 1 , 0], #dayly, weekly, monthly weights
+    'mean_weights_d_w_m':[3.0 , 1 ], #dayly, weekly
+
     'apply_utility_factor': True,
 
     #Params for CAGR Portfolio DDN Limited
@@ -107,8 +104,8 @@ settings={
 
 # --- Per-source fixed factors (only used when blend_metric == 'fixed') ---
     'scipy_blend_factor': 0.0,
-    'vectorized_blend_factor': 0.35, #0.4
-    'ddn_blend_factor': 0.65, #0.6
+    'vectorized_blend_factor': 0.35, #0.35
+    'ddn_blend_factor': 0.65, #0.65
 
 # --- Rolling metric params (used for 'cagr', 'sharpe', 'mean') ---
     'blend_window': 30,  # 22 lookback days

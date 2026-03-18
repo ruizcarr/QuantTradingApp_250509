@@ -24,120 +24,9 @@ warnings.filterwarnings('ignore')
 warnings.warn = lambda *a, **kw: False
 
 
-def main():
-
-    # Import Settings
-    from config import settings
-    settings=settings.get_settings() #Edit Settings Dict at file config/settings.py
-
-    # Update Main Settings
-    #settings['start'] = '1996-01-01'  # '1996-01-01' #'2019-01-01'
-    settings['end'] = (date.today() + timedelta(days=1)).isoformat()
-    settings['offline'] = False
-    settings['qstats'] = True
-    settings['do_BT'] = True
-    #settings['startcash'] = 43000  # 52000 # '2016-01-01'
-    # settings['tickers_bounds'] = {'ES=F': (0,0.5), 'NQ=F': (0,0.6), 'GC=F': (0.00,0.4), 'CL=F': (0,0.15), 'EURUSD=X': (0,0.0)} # {'ES=F': (0,0.5), 'NQ=F': (-0,0.6), 'GC=F': (0.00,0.5), 'CL=F': (0,0.25), 'EURUSD=X': (-0.00,0.0)}
-
-    # Get Data
-
-    times={}
-    start_t = time.time()
-
-    data=mdf.Data(settings['contango'],settings['tickers'],settings['start'],settings['end'],settings['add_days'])
-    tickers_returns = data.tickers_returns
-    print("tickers_closes\n", data.tickers_closes[:-5].tail(5))
-
-    end_t1 = time.time()
-    times['get_data, indicators, params']=round(end_t1-start_t,2)
-
-    #Compute Markowitz for dayly, Weekly & Monthly
-    weights_df, metrics_df, rolling_metrics_dict, weekly_metrics_df, monthly_metrics_df,markowitz_metrics_dicts=\
-        compute_optimized_markowitz_d_w_m(tickers_returns, settings)
-
-    end_t2 = time.time()
-    times['Markowitz'] = round(end_t2 - end_t1, 2)
-
-    #Cash Backtest
-    if settings['do_BT']:
-        #Compute Backtest
-        bt_log_dict,log_history = compute_backtest_vectorized(weights_df,settings,data.data_dict)
-
-        end_t3 = time.time()
-        times['Backtest'] = round(end_t3 - end_t2, 2)
-
-        #Get Backtest Results from log_dict
-        pos, portfolio_value_eur, portfolio_value_usd = [bt_log_dict[key] for key in ['pos', 'portfolio_value_eur','portfolio_value']]
-        backtest_returns=portfolio_value_eur.pct_change()
-        #Get Backtest Results Metrics
-        metrics_backtest,rolling_metrics_df=get_returns_metrics(backtest_returns,'dayly')
-        metrics_df['backtest']=metrics_backtest.T
-
-        #print('pos \n', pos)
-        #print('backtest_returns \n', backtest_returns)
-        print('pos\n', pos.tail(10))
-        print('log_history\n', log_history.tail(40))
-        print('end portfolio_value_eur', round(portfolio_value_eur.iloc[-1], 2))
-
-    #Prints
-    print('weights_df\n', weights_df.tail(10))
-    print('metrics_df\n',metrics_df)
-
-    print('weekly_metrics_df\n',weekly_metrics_df)
-    #print('monthly_metrics_df\n', monthly_metrics_df)
-
-    print(times)
-
-    #Plots
-    weights_df.plot(title='weights_df')
-    pos.plot(title='pos')
-
-
-    def opt_fun_min_study(markowitz_metrics_dicts):
-        cagr_w='250' #str(settings['cagr_w'][0])
-        opt_fun=markowitz_metrics_dicts[cagr_w]['opt_fun_xs'][-len(pos):,:]
-        xs=markowitz_metrics_dicts[cagr_w]['xs'][-len(pos):,:]
-        string_xs =  xs.astype(str)
-        opt_fun=pd.DataFrame(opt_fun,columns=string_xs ,index=pos.index).iloc[:,[-300,-200,-100,-50,-1]]  #-10:]
-        opt_fun['opt_fun_min']=pd.DataFrame(markowitz_metrics_dicts[cagr_w]['opt_fun_min']).iloc[-len(pos):]['opt_fun']
-
-        print(opt_fun['opt_fun_min'].describe())
-        plt.figure()
-        opt_fun['opt_fun_min'].plot(title='opt_fun,  cagr_w=' + cagr_w)
-        #opt_fun.plot(title='opt_fun,  cagr_w='+cagr_w)
-
-        #opt_fun_factor
-        opt_fun_min=opt_fun['opt_fun_min']
-
-
-        opt_fun_min_factor=get_opt_fun_min_factor(opt_fun_min)
-
-        print_metrics(opt_fun_min_factor)
-
-    #opt_fun_min_study(markowitz_metrics_dicts)
-
-    #Study Predictive capacity of opt_fun
-    def opt_fun_predictive_capacity_study(markowitz_metrics_dicts):
-        cagr_w='250'
-        opt_fun_xs=markowitz_metrics_dicts[cagr_w]['opt_fun_xs'][-len(pos):,:]
-        opt_fun_predition_accuracy=get_opt_fun_predition_accuracy(opt_fun_xs)
-
-
-    #Opt Fun Normalization Study
-    if False:
-        cagr_w = '250'
-        print(markowitz_metrics_dicts[cagr_w].keys())
-        for key in ['risk_xs', 'cagr_xs']: #'volatility_xs_norm', 'volat_xs_std_norm','ddn_xs_std_norm'
-            #key='ddn_xs_std'
-            (pd.DataFrame(markowitz_metrics_dicts[cagr_w][key])).plot(title=key) #.loc[:, 0:10]
-
-    plt.show()
-
-
-
 #FUNCTIONS
 
-def compute_optimized_markowitz_d_w_m(tickers_returns, settings):
+def compute_optimized_markowitz_d_w(tickers_returns, settings):
 
     # Weights Combination xs
     tickers_bounds = {ticker: settings['tickers_bounds'][ticker] for ticker in tickers_returns.columns}
@@ -153,61 +42,48 @@ def compute_optimized_markowitz_d_w_m(tickers_returns, settings):
     #Compute Weekly Markowitz
     weekly_weights_df, w_returns, weekly_metrics_df, weekly_rolling_metrics_dict,w_k=compute_weekly_markowitz(tickers_returns,xs, settings,strat_period='weekly')
 
-    #Compute Monthly Markowitz
-    monthly_weights_df, m_returns, monthly_metrics_df, monthly_rolling_metrics_dict,m_k = compute_monthly_markowitz(tickers_returns,xs, settings,strat_period='monthly')
-
-    #Weighed Mean Dayly / Weekly / Monthly
+   #Weighed Mean Dayly / Weekly
 
     mean=False
 
     if mean:
 
         #Mean Weights
-        d_k,w_k,m_k = settings['mean_weights_d_w_m']
-        weights_df=(dayly_weights_df*d_k+weekly_weights_df*w_k+monthly_weights_df*m_k)/(d_k+w_k+m_k)
+        d_k,w_k = settings['mean_weights_d_w']
+        weights_df=(dayly_weights_df*d_k+weekly_weights_df*w_k)/(d_k+w_k)
 
     else:
         # Apply Markowitz to get optimal Startegy
         #Get strat_periods
         strat_periods =settings['strat_periods']
-        #Create d_w_m_returns_df with n_strats columns
-        d_w_m_returns_df=pd.DataFrame({period: df for period,df in zip(strat_periods,[d_returns,w_returns,m_returns])})
-        # Concat d_w_m_ weights array (n_strats,n_days,n_tickers)
-        d_w_m_weights = np.array([np.array(df) for period, df in zip(strat_periods, [dayly_weights_df, weekly_weights_df, weekly_weights_df])])
+        #Create d_w_returns_df with n_strats columns
+        d_w_returns_df=pd.DataFrame({period: df for period,df in zip(strat_periods,[d_returns,w_returns])})
+        # Concat d_w_ weights array (n_strats,n_days,n_tickers)
+        d_w_weights = np.array([np.array(df) for period, df in zip(strat_periods, [dayly_weights_df, weekly_weights_df])])
 
         volat_target=settings['volatility_target']
-        weight_lim=0.8
-        weight_sum_lim = 1.2
-        cagr_w=250*4
+        weight_lim=0.8 #0.8
+        weight_sum_lim = 1.2 #1.2
+        cagr_w=250*4 #250*4
         strat_period = 'dayly'
 
-        weights_comb_array, weights_by_strategy_df = get_combined_strategy_by_markowitz(d_w_m_returns_df, d_w_m_weights, volat_target,weight_lim,weight_sum_lim,cagr_w, strat_period)
+        weights_comb_array, weights_by_strategy_df = get_combined_strategy_by_markowitz(d_w_returns_df, d_w_weights, volat_target,weight_lim,weight_sum_lim,cagr_w, strat_period)
 
         weights_df = pd.DataFrame(weights_comb_array, index=dayly_weights_df.index, columns=dayly_weights_df.columns, dtype=float)
 
-        #Make fast mean for smooth  curve
-        w=6
-        weights_df=weights_df.rolling(w).mean().fillna(0)
-
-
-        #Plot debug
-        #weights_by_strategy_df = weights_by_strategy_df.rolling(w).mean().fillna(0)
-        #plot_df=weights_by_strategy_df.copy()
-        #plot_df['sum']=plot_df.sum(axis=1)
-        #plot_df.plot(title='weights_by_strategy')
-
-    #print('weights_df',weights_df )
-
+    # Make fast mean for smooth  curve
+    w = 6  # 6
+    weights_df = weights_df.rolling(w).mean().fillna(0)
 
     #Get Metrics for Mean D/W Returns
     strategy_returns, metrics, rolling_metrics = get_strategy_metrics(weights_df, tickers_returns, 'dayly')
-    metrics_df['d_w_m']=metrics.T
-    rolling_metrics_dict['d_w_m']=rolling_metrics
+    metrics_df['d_w']=metrics.T
+    rolling_metrics_dict['d_w']=rolling_metrics
 
     # Optimization by Utility Up factor
     weights_df, metrics_df, rolling_metrics_dict, returns_p = compute_utility_factor(settings['apply_utility_factor'],tickers_returns, weights_df, metrics_df, rolling_metrics_dict, returns_p,weight_sum_lim,'dayly')
 
-    return weights_df, metrics_df, rolling_metrics_dict, weekly_metrics_df, monthly_metrics_df,markowitz_metrics_dicts
+    return weights_df, metrics_df, rolling_metrics_dict, weekly_metrics_df, markowitz_metrics_dicts
 
 def compute_optimized_markowitz(tickers_returns, settings):
     # Compute Markowitz Looping  over Selected Parameter
@@ -235,11 +111,6 @@ def compute_markowitz_loop_over_ps(tickers_returns,xs,settings,strat_period='day
         cov_w = settings['cov_w_weekly']
         ps = settings[str(settings['param_to_loop']+'_weekly')]
         year=52
-
-    elif strat_period=='monthly':
-        cov_w = settings['cov_w_monthly']
-        ps = settings[str(settings['param_to_loop']+'_monthly')]
-        year=12
 
     #Get Markowitz Metrics
 
@@ -409,7 +280,6 @@ def limit_xs_diff(xs, max_diff=0.1):
 def compute_markowitz_cov_metrics(returns,xs,cov_w,volat_target,strat_period):
     if strat_period=='dayly':  year,week=252,5
     elif strat_period=='weekly': year,week=53,1
-    elif strat_period == 'monthly':year, week = 12, 12/53
     else: print('strat_period not defined')
 
     #Covariance Matrix
@@ -467,7 +337,6 @@ def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
 
     if strat_period=='dayly': year, week=252,5
     elif strat_period=='weekly': year, week =53,1
-    elif strat_period == 'monthly': year, week = 12, 1
     else: print('strat_period not defined')
 
     #CAGR for all weights xs (Alternate)
@@ -776,7 +645,6 @@ def get_returns_metrics(returns,strat_period='dayly'):
 
     if strat_period=='dayly': year,month,week=252,22,5
     elif strat_period=='weekly': year,month,week=53,4,1
-    elif strat_period == 'monthly': year, month,week = 12, 1,1
     else: print('strat_period not defined')
 
 
@@ -1048,35 +916,6 @@ def end_of_week_data(df):
 
     return weekly_df
 
-def end_of_month_data(df):
-    """
-    Get Month Last Data available
-    :param df:
-    :return: monthly_df
-    """
-    # Create Calendar Dates
-    start = df.index[0]
-    end = df.index[-1]
-    calendar_dates=pd.date_range(start, end)
-
-    # Create date of last data available
-    date_of_last_data = df.index.to_series().reindex(calendar_dates).fillna(method='ffill')
-
-    #Keep Fridays date of last data available
-    monthly_date_of_last_data = date_of_last_data.resample('M').last()
-
-    #Get data for this dates
-    monthly_df=df.loc[monthly_date_of_last_data,:]
-
-    #Drop duplicates
-    non_duplicate_indices = ~monthly_df.index.duplicated(keep='first')  # Change 'first' to 'last' if needed
-    monthly_df = monthly_df.loc[non_duplicate_indices]
-
-    #Drop rows where NaN
-    monthly_df=monthly_df.dropna()
-
-    return monthly_df
-
 
 def get_strategy_returns(weights, returns):
     # Start
@@ -1098,35 +937,6 @@ def get_strategy_metrics(weights, tickers_returns, strat_period):
 
     return strategy_returns, metrics, rolling_metrics
 
-def compute_weekly_markowitz_ok(data,xs, settings,strat_period):
-
-    if 'weekly' in settings['strat_periods']:
-
-        tickers_returns = data.tickers_returns
-
-        #Get weekly data considering fridays holidays
-        #weekly_returns = end_of_week_data(data.tickers_closes).pct_change().dropna()
-        weekly_returns = tickers_returns.resample('W-FRI').sum()
-
-        # Compute Weekly Markowitz Looping  over Selected Parameter
-        weekly_weights_df, w_returns, weekly_returns_p , weekly_metrics_df, weekly_rolling_metrics_dict,w_markowitz_metrics_dicts= compute_markowitz_loop_over_ps(weekly_returns,xs, settings,strat_period)
-
-        # Upsample to dayly with values of previous Friday
-        weekly_weights_df = weekly_weights_df.reindex(tickers_returns.index).shift(1).fillna(method='ffill').fillna(0)
-
-        #Get Metrics for Monthly Strategy Upsample to dayly
-        w_returns , metrics, rolling_metrics = get_strategy_metrics(weekly_weights_df, tickers_returns, 'dayly')
-        weekly_metrics_df['weekly']=metrics.T
-        weekly_rolling_metrics_dict['weekly']=rolling_metrics
-
-        #Set weekly multiplicator at mean weight
-        w_k=1.25 #max(weekly_metrics_df.loc['sharpe', 'weekly'] - bs,0)*weekly_metrics_df.loc['sharpe_ddn', 'weekly']
-
-    else:
-        weekly_weights_df, w_returns ,weekly_metrics_df, weekly_rolling_metrics_dict,w_k=0,0,0,0,0
-
-    return weekly_weights_df, w_returns , weekly_metrics_df, weekly_rolling_metrics_dict,w_k
-
 def compute_weekly_markowitz(tickers_returns,xs, settings,strat_period):
 
     if 'weekly' in settings['strat_periods']:
@@ -1140,7 +950,7 @@ def compute_weekly_markowitz(tickers_returns,xs, settings,strat_period):
         # Upsample to dayly with values of previous Friday
         weekly_weights_df = weekly_weights_df.reindex(tickers_returns.index).shift(1).fillna(method='ffill').fillna(0)
 
-        #Get Metrics for Monthly Strategy Upsample to dayly
+        #Get Metrics for Weekly Strategy Upsample to dayly
         w_returns , metrics, rolling_metrics = get_strategy_metrics(weekly_weights_df, tickers_returns, 'dayly')
         weekly_metrics_df['weekly']=metrics.T
         weekly_rolling_metrics_dict['weekly']=rolling_metrics
@@ -1152,59 +962,6 @@ def compute_weekly_markowitz(tickers_returns,xs, settings,strat_period):
         weekly_weights_df, w_returns ,weekly_metrics_df, weekly_rolling_metrics_dict,w_k=0,0,0,0,0
 
     return weekly_weights_df, w_returns , weekly_metrics_df, weekly_rolling_metrics_dict,w_k
-
-def compute_monthly_markowitz_ok(data,xs, settings,strat_period):
-
-    if 'monthly' in settings['strat_periods']:
-
-        tickers_returns = data.tickers_returns
-        # Get weekly data considering fridays holidays
-        monthly_returns = end_of_month_data(data.tickers_closes).pct_change().dropna()
-
-        # Compute monthly Markowitz Looping  over Selected Parameter
-        monthly_weights_df, m_returns, monthly_returns_p, monthly_metrics_df, monthly_rolling_metrics_dict, m_markowitz_metrics_dicts = compute_markowitz_loop_over_ps(monthly_returns,xs, settings,strat_period)
-
-        # Upsample to dayly with values of previous Friday
-        monthly_weights_df = monthly_weights_df.reindex(tickers_returns.index).shift(1).fillna(method='ffill').fillna(0)
-
-        # Get Metrics for Monthly Strategy Upsample to dayly
-        m_returns, metrics, rolling_metrics = get_strategy_metrics(monthly_weights_df, tickers_returns, 'dayly')
-        monthly_metrics_df['monthly'] = metrics.T
-        monthly_rolling_metrics_dict['monthly'] = rolling_metrics
-
-        #Monthly multiplicator at weights mean
-        m_k = 0.3 #0.66  # max(monthly_metrics_df.loc['sharpe', 'monthly'] - bs,0)*monthly_metrics_df.loc['sharpe_ddn', 'monthly']
-
-    else:
-        monthly_weights_df, m_returns,monthly_metrics_df, monthly_rolling_metrics_dict, m_k = 0, 0, 0, 0,0
-
-    return monthly_weights_df, m_returns, monthly_metrics_df, monthly_rolling_metrics_dict,m_k
-
-def compute_monthly_markowitz(tickers_returns,xs, settings,strat_period):
-
-    if 'monthly' in settings['strat_periods']:
-
-        # Get weekly data considering fridays holidays
-        monthly_returns = tickers_returns.resample('M').sum()
-
-        # Compute monthly Markowitz Looping  over Selected Parameter
-        monthly_weights_df, m_returns, monthly_returns_p, monthly_metrics_df, monthly_rolling_metrics_dict, m_markowitz_metrics_dicts = compute_markowitz_loop_over_ps(monthly_returns,xs, settings,strat_period)
-
-        # Upsample to dayly with values of previous Friday
-        monthly_weights_df = monthly_weights_df.reindex(tickers_returns.index).shift(1).fillna(method='ffill').fillna(0)
-
-        # Get Metrics for Monthly Strategy Upsample to dayly
-        m_returns, metrics, rolling_metrics = get_strategy_metrics(monthly_weights_df, tickers_returns, 'dayly')
-        monthly_metrics_df['monthly'] = metrics.T
-        monthly_rolling_metrics_dict['monthly'] = rolling_metrics
-
-        #Monthly multiplicator at weights mean
-        m_k = 0.3 #0.66  # max(monthly_metrics_df.loc['sharpe', 'monthly'] - bs,0)*monthly_metrics_df.loc['sharpe_ddn', 'monthly']
-
-    else:
-        monthly_weights_df, m_returns,monthly_metrics_df, monthly_rolling_metrics_dict, m_k = 0, 0, 0, 0,0
-
-    return monthly_weights_df, m_returns, monthly_metrics_df, monthly_rolling_metrics_dict,m_k
 
 def set_limit_to_weights_sum(weights_df,weight_sum_lim):
     weights_sum = weights_df.sum(axis=1)
@@ -1279,5 +1036,3 @@ def get_regime_mask(returns, window=20):
     return (states == high_vol_idx).astype(float)
 
 
-if __name__ == "__main__":
-    main()

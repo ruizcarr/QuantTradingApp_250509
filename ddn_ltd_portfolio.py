@@ -99,7 +99,7 @@ class DDNLimitedPortfolio:
             self.final_weights = self.final_weights.div(scaling_factor, axis=0)
 
         # 7. Shift to avoid lookahead bias
-        self.final_weights = self.final_weights.shift(1)
+        self.final_weights = self.final_weights.shift(1).fillna(0)
 
         return self.final_weights
 
