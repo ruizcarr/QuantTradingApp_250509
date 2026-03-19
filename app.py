@@ -1,19 +1,8 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import datetime
-
-from datetime import date
-from datetime import timedelta
-import time
 import pytz
 import altair as alt
-import matplotlib.pyplot as plt
-import json
-import random
-import subprocess
-import sys
-import os
 
 import numpy as np, random
 np.random.seed(42)
