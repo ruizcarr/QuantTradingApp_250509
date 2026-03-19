@@ -100,7 +100,7 @@ settings={
     'd_max_total_leverage': 1.00, #1.0
 
     # --- Blend mode ---
-    'blend_metric': 'fixed',  # 'fixed' | 'cagr' | 'sharpe' | 'mean' | 'utility'
+    'blend_metric': 'fixed',  # 'fixed' | 'cagr' | 'sharpe' | 'mean' | 'utility'| 'markowitz'
 
 # --- Per-source fixed factors (only used when blend_metric == 'fixed') ---
     'scipy_blend_factor': 0.0,

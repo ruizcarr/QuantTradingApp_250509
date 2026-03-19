@@ -34,6 +34,7 @@ def compute_optimized_markowitz_d_w(tickers_returns, settings):
     weight_sum_lim = settings['exposition_lim']
 
     # Generate Fix weights Combinations to find the best
+
     xs = generate_xs_combinations(tickers_bounds, weight_sum_lim, step=0.10) #0.10
 
     # Compute Dayly Markowitz Looping  over Selected Parameter
@@ -44,32 +45,23 @@ def compute_optimized_markowitz_d_w(tickers_returns, settings):
 
    #Weighed Mean Dayly / Weekly
 
-    mean=False
+    # Apply Markowitz to get optimal Startegy
+    #Get strat_periods
+    strats =settings['strat_periods']
+    #Create d_w_returns_df with n_strats columns
+    d_w_returns_df=pd.DataFrame({strat: df for strat,df in zip(strats,[d_returns,w_returns])})
+    # Concat d_w_ weights array (n_strats,n_days,n_tickers)
+    d_w_weights = np.array([np.array(df) for strat, df in zip(strats, [dayly_weights_df, weekly_weights_df])])
 
-    if mean:
+    volat_target=settings['volatility_target']
+    weight_lim=0.8 #0.8
+    weight_sum_lim = 1.2 #1.2
+    cagr_w=250*4 #250*4
+    timeframe = 'dayly'
 
-        #Mean Weights
-        d_k,w_k = settings['mean_weights_d_w']
-        weights_df=(dayly_weights_df*d_k+weekly_weights_df*w_k)/(d_k+w_k)
+    weights_comb_array, weights_by_strategy_df = get_combined_strategy_by_markowitz(d_w_returns_df, d_w_weights, volat_target,weight_lim,weight_sum_lim,cagr_w, timeframe)
 
-    else:
-        # Apply Markowitz to get optimal Startegy
-        #Get strat_periods
-        strat_periods =settings['strat_periods']
-        #Create d_w_returns_df with n_strats columns
-        d_w_returns_df=pd.DataFrame({period: df for period,df in zip(strat_periods,[d_returns,w_returns])})
-        # Concat d_w_ weights array (n_strats,n_days,n_tickers)
-        d_w_weights = np.array([np.array(df) for period, df in zip(strat_periods, [dayly_weights_df, weekly_weights_df])])
-
-        volat_target=settings['volatility_target']
-        weight_lim=0.8 #0.8
-        weight_sum_lim = 1.2 #1.2
-        cagr_w=250*4 #250*4
-        strat_period = 'dayly'
-
-        weights_comb_array, weights_by_strategy_df = get_combined_strategy_by_markowitz(d_w_returns_df, d_w_weights, volat_target,weight_lim,weight_sum_lim,cagr_w, strat_period)
-
-        weights_df = pd.DataFrame(weights_comb_array, index=dayly_weights_df.index, columns=dayly_weights_df.columns, dtype=float)
+    weights_df = pd.DataFrame(weights_comb_array, index=dayly_weights_df.index, columns=dayly_weights_df.columns, dtype=float)
 
     # Make fast mean for smooth  curve
     w = 6  # 6
@@ -95,7 +87,7 @@ def compute_optimized_markowitz(tickers_returns, settings):
     return weights_df, metrics_df, rolling_metrics_dict,returns_p
 
 
-def compute_markowitz_loop_over_ps(tickers_returns,xs,settings,strat_period='dayly'):
+def compute_markowitz_loop_over_ps(tickers_ret,xs,settings,strat_period='dayly'):
 
     #Compute markowitz metrics invariant by p parameter loop
 
@@ -107,22 +99,23 @@ def compute_markowitz_loop_over_ps(tickers_returns,xs,settings,strat_period='day
         ps = settings[settings['param_to_loop']]
         year=250
 
+
+
     elif strat_period=='weekly':
         cov_w = settings['cov_w_weekly']
         ps = settings[str(settings['param_to_loop']+'_weekly')]
         year=52
 
+    # Substract Contango from tickers_ret
+    contango_list = [settings['contango'][ticker] for ticker in tickers_ret.columns]
+    tickers_ret = tickers_ret - np.array(contango_list) / 100 / 252
+
     #Get Markowitz Metrics
-
-    # Substract Contango from tickers_returns
-    contango_list = [settings['contango'][ticker] for ticker in tickers_returns.columns]
-    tickers_returns=tickers_returns-np.array(contango_list )/100/252
-
-    markowitz_metrics_dict=compute_markowitz_cov_metrics(tickers_returns,xs,cov_w,volat_target,strat_period)
+    markowitz_metrics_dict=compute_markowitz_cov_metrics(tickers_ret,xs,cov_w,volat_target,strat_period)
 
     #Initialize df and dict to store loop resuts
-    weights_p_df = pd.DataFrame(index=tickers_returns.index)
-    returns_p=pd.DataFrame(index=tickers_returns.index)
+    weights_p_df = pd.DataFrame(index=tickers_ret.index)
+    returns_p=pd.DataFrame(index=tickers_ret.index)
     metrics_p=pd.DataFrame()
     rolling_metrics_dict={}
     markowitz_metrics_p_dicts={}
@@ -143,7 +136,7 @@ def compute_markowitz_loop_over_ps(tickers_returns,xs,settings,strat_period='day
         weights_p_array.append(np.array(weights_df ))
 
         #Get Startegy Metrics
-        returns_w, m, rolling_metrics = get_strategy_metrics(weights_df,tickers_returns, strat_period)
+        returns_w, m, rolling_metrics = get_strategy_metrics(weights_df,tickers_ret, strat_period)
 
         # Save Results for this Parameter
         metrics_p[str(cagr_w)]=m.T
@@ -185,7 +178,7 @@ def compute_markowitz_loop_over_ps(tickers_returns,xs,settings,strat_period='day
 
 
     # Get Combined Startegy Metrics
-    strat_returns, m, rolling_metrics = get_strategy_metrics(weights_comb_df, tickers_returns, strat_period)
+    strat_returns, m, rolling_metrics = get_strategy_metrics(weights_comb_df, tickers_ret, strat_period)
 
     #save Results for Combined Strategy
     metrics_p['combined']=m.T
@@ -211,7 +204,7 @@ def get_combined_strategy_by_markowitz(returns_p, weights_p_array, volat_target,
         # Generate Fix weights Combinations to find the best
         p_bounds={key:(0,weight_lim) for key in returns_p.columns}
 
-        xs = generate_xs_combinations(p_bounds, weight_sum_lim, step=0.10)
+        xs = generate_xs_combinations(p_bounds, weight_sum_lim, step=0.15)
 
         # Get Markowitz Metrics
         cov_w=10
@@ -245,6 +238,8 @@ def get_combined_strategy_by_markowitz(returns_p, weights_p_array, volat_target,
 
         # Multiply and sum along axis 0
         weights_by_ticker_array = np.sum(weights_p_array * weights_by_strategy_array_reshaped, axis=0)
+
+
 
         return weights_by_ticker_array,weights_by_strategy_df
 
@@ -312,7 +307,7 @@ def compute_markowitz_cov_metrics(returns,xs,cov_w,volat_target,strat_period):
     lower_volat = 0.01
     low_volat_xs = np.where(volatility_xs < lower_volat, lower_volat / volatility_xs - 1, 0)
 
-    penalties_xs = high_volat_xs + low_volat_xs
+    penalties_xs = np.clip(high_volat_xs + low_volat_xs,0,2)
 
     #Save values in a dict
     dict={
@@ -326,10 +321,6 @@ def compute_markowitz_cov_metrics(returns,xs,cov_w,volat_target,strat_period):
         'ddn_xs_std': ddn_xs_std,
         'penalties_xs': penalties_xs,
           }
-
-    #Normalized Metrics Clip (0,1)
-    #for key in list(dict.keys()):
-    #    dict[key + "_norm"] = np.clip(dict[key], 0.0001, 1)
 
     return dict
 
@@ -363,15 +354,14 @@ def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
         risk_xs_components=['volatility_xs_norm','ddn_xs_std_norm','volat_xs_std_norm']
         dfs_dict={key: dict [key] for key in risk_xs_components}
         weights_list=[1.0, 1.0, 0.5]
-        dict['risk_xs'] = weighted_mean_of_dfs_dict(dfs_dict, weights_list)
-        dict['risk_xs_norm'] = dict['risk_xs']
+        dict['risk_xs_norm'] = weighted_mean_of_dfs_dict(dfs_dict, weights_list)
 
         dict['opt_fun_xs'] = dict['risk_xs_norm'] - dict['cagr_xs_norm'] + dict['penalties_xs_norm']
 
 
     else:
 
-        dict['risk_xs'] = dict['volatility_xs'] * 0.5 + dict['ddn_xs_std']*1.5 + dict['volat_xs_std'] * 0.15
+        dict['risk_xs'] = dict['volatility_xs'] * 1 + dict['ddn_xs_std']*0.0 + dict['volat_xs_std'] * 0.0
 
         dict['opt_fun_xs'] = dict['risk_xs'] - dict['cagr_xs'] + dict['penalties_xs']
 
@@ -462,18 +452,6 @@ def compute_mkwtz_vectorized_local(markowitz_data_dict, metrics=True):
     # Get weights of this minimum
     weights = xs[opt_fun_min_idx_xs]
 
-    #Compare with previous values and keep if not relevant improvement
-    #opt_fun_min_idx_xs, opt_fun_min=compare_min_vs_previous(opt_fun_xs,opt_fun_min_idx_xs,opt_fun_min,keep_treshold=0.01)
-
-
-
-    #Apply opt_fun_min_factor inv proportional to value
-    #opt_fun_factor = get_opt_fun_min_factor(opt_fun_min)
-    #weights=weights*opt_fun_factor
-
-    #Set weights to zero when opt_fun_min is high
-    #weights = set_weights_to_zero_when_opt_fun_min_is_high(opt_fun_min,weights)
-
     # Save weights as df
     weights_df = pd.DataFrame(weights, index=returns.index, columns=returns.columns)
 
@@ -497,149 +475,10 @@ def compute_mkwtz_vectorized_local(markowitz_data_dict, metrics=True):
 
     return weights_df, metrics_opt_df, metrics_xs_dict
 
-def get_opt_fun_min_factor(opt_fun_min):
-    opt_fun_min_factor= log_normalize(-opt_fun_min)
-    #opt_fun_min_factor = minmax_normalize(-opt_fun_min)
-    opt_fun_min_factor = mean_std_normalize(opt_fun_min_factor, n=2)
-    #opt_fun_min_factor = mean_std_normalize(-opt_fun_min,n=1.5) #array (n_days,)
-    opt_fun_min_factor = opt_fun_min_factor / np.nanmean(opt_fun_min_factor) #set mean=1
-    opt_fun_min_factor =np.expand_dims(opt_fun_min_factor, axis=1) #array (n_days,1)
-    opt_fun_min_factor = opt_fun_min_factor * 0.9 #0.9 #Multiply by fix factor
-    opt_fun_min_factor = np.clip(opt_fun_min_factor,0,2) #Limit max, min values
-    return opt_fun_min_factor
-
-def set_weights_to_zero_when_opt_fun_min_is_high(opt_fun_min,weights):
-    opt_fun_min_mean=np.nanmean(opt_fun_min)
-    opt_fun_min_std = np.nanstd(opt_fun_min)
-    opt_fun_upper_lim =opt_fun_min_mean+opt_fun_min_std/2
-    opt_fun_min_is_high=opt_fun_min>opt_fun_upper_lim #-0.04
-    weights[opt_fun_min_is_high] = weights[opt_fun_min_is_high] * 0 # / 4
-    return weights
-
-def compute_mkwtz_vectorized_local_ltd_diff(markowitz_data_dict, metrics=True):
-    """
-    Get Portfolio Weights for each day that minimize Function to minimize.
-    Function Sample: Volatility - CAGR
-
-    Args in markowitz_data_dict:
-        returns: dataframe timeseries (n_days, n_tickers)
-        xs: array (n_combination,n_tickers) of all possible combinations of n elements within specified bounds
-        opt_fun_xs: array(n_days,n_combination) of function to minimize for all xs
-
-    Returns:
-        weights: selected x array (n_days,n_tickers) from xs for each day that minimize opt_fun
-
-        Limited to max_diff betwhen current and previous weights array values (eg. max_diff=0.1
-
-    """
-
-    # Get Data, Metrics and Function from dict
-    returns,xs,volatility_xs, cagr_xs, opt_fun_xs = \
-        [markowitz_data_dict[k] for k in
-         ['returns','xs','volatility_xs', 'cagr_xs', 'opt_fun_xs']]
-
-    #Initiaize weights values
-    weights=np.zeros((len(returns),len(returns.columns)))
-
-    #Limit xs - weights to a max_diff
-    max_diff=0.3
-
-    for i in range(3):
-        # Calculate the element-wise difference
-        # Repeat weights along the second axis to match xs
-        weights_repeated = np.repeat(weights[:, np.newaxis, :], xs.shape[0], axis=1)
-        diffs = weights_repeated - xs
-        diff_is_high=np.any(np.abs(diffs) > max_diff, axis=2)
-        #Asign high value to opt_fun where diff is high
-        opt_fun_xs_ltd=np.where(diff_is_high,1,opt_fun_xs)
 
 
-        # Localize index of xs where opt_fun is minimum
-        opt_fun_min_idx_xs = np.argmin(opt_fun_xs_ltd, axis=1)
 
-        # opt_fun_xs values for opt_fun_min_idx_xs
-        opt_fun_min = np.take_along_axis(opt_fun_xs_ltd, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
 
-        # Get weights of this minimum
-        weights = xs[opt_fun_min_idx_xs]
-
-    # Save weights as df
-    weights_df = pd.DataFrame(weights, index=returns.index, columns=returns.columns)
-
-    # Save Metrics
-    if metrics:
-
-        # Metrics of this mimimum
-        metrics_opt_df = pd.DataFrame(index=returns.index)
-        metrics_opt_df['volat'] = np.take_along_axis(volatility_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
-        metrics_opt_df['ret'] = np.take_along_axis(cagr_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
-        metrics_opt_df['opt_fun'] = opt_fun_min
-
-        # All xs Metrics
-        metrics_xs_dict = {'volatility_xs': volatility_xs, 'cagr_xs': cagr_xs}
-
-    else:
-        metrics_xs_dict = None
-        metrics_opt_df = None
-
-    return weights_df, metrics_opt_df, metrics_xs_dict
-
-def compare_min_vs_previous(opt_fun_xs,opt_fun_min_idx_xs,opt_fun_min,keep_treshold=0.05):
-    # opt_fun keeping previous weights
-    prev_opt_fun_min_idx_xs = np.roll(opt_fun_min_idx_xs, 1)
-    prev_opt_fun_min_idx_xs[0] =0
-    opt_fun_min_prev_x=np.take_along_axis(opt_fun_xs, np.expand_dims(prev_opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
-
-    #Compare and keep previous when difference is not relevant
-    #opt_fun_min_diff=opt_fun_min/opt_fun_min_prev_x-1
-    opt_fun_min_diff = opt_fun_min - opt_fun_min_prev_x
-    print_metrics(opt_fun_min_diff)
-    keep_treshold=np.nanstd(opt_fun_min_diff)/1000
-    print('keep_treshold',keep_treshold)
-    opt_fun_not_relevant_diff=opt_fun_min_diff<-keep_treshold
-    print('opt_fun_not_relevant_diff pct',np.sum(opt_fun_not_relevant_diff)/opt_fun_not_relevant_diff.shape[0])
-
-    opt_fun_sel_idx_xs = np.where(opt_fun_not_relevant_diff, prev_opt_fun_min_idx_xs, opt_fun_min_idx_xs)
-
-    #Update metrics
-    opt_fun_sel = np.take_along_axis(opt_fun_xs, np.expand_dims(opt_fun_sel_idx_xs, axis=-1), axis=1).flatten()
-
-    return opt_fun_sel_idx_xs, opt_fun_sel
-
-def compromise_diff_to_best_trading_cost(opt_fun_xs, opt_fun_min_idx_xs, opt_fun_min, xs):
-    # Compare opt_fun values for this weights vs keeping previous weights
-    # opt_fun_sel_idx_xs, opt_fun_sel = compare_min_vs_previous(opt_fun_xs,opt_fun_min_idx_xs,opt_fun_min,keep_treshold=-.05)
-
-    # Get indexes with Top opt_fun
-    # Get difference from each opt_fun_xs - opt_fun_min
-    opt_fun_xs_diff_to_min = opt_fun_xs - opt_fun_min.reshape(opt_fun_xs.shape[0], 1)
-
-    for i in range(100):
-        # Get Trading Cost idem to Change of xs
-        # Previous opt_fun_min_idx_xs
-        prev_opt_fun_min_idx_xs = np.roll(opt_fun_min_idx_xs, 1)
-        prev_opt_fun_min_idx_xs[0] = 0
-        # Previous x_opt_fun_min
-        prev_x_opt_fun_min = xs[prev_opt_fun_min_idx_xs]
-        # Repeat `x_opt_fun_min` along the second axis to match the shape of `xs`
-        x_opt_fun_min_repeated = np.repeat(prev_x_opt_fun_min[:, np.newaxis, :], xs.shape[0], axis=1)
-        # Calculate the element-wise differences
-        diff_xs_to_x_opt_fun_min = np.abs(np.linalg.norm(xs - x_opt_fun_min_repeated, axis=2))
-
-        def normalized(array):
-            return (array - np.nanmin(array)) / np.nanmean(array)
-
-        # Keep the compromised indexes with best combined opt_fun + trading_cost
-        opt_fun_xs_diff_to_min = np.clip(opt_fun_xs_diff_to_min, -1, 0.1)
-        diff_to_best = normalized(opt_fun_xs_diff_to_min)
-        trading_cost = normalized(diff_xs_to_x_opt_fun_min)
-        compr_fun = 4 * diff_to_best + trading_cost
-        # compr_fun = opt_fun_xs_diff_to_min + diff_xs_to_x_opt_fun_min
-
-        # Localize index of xs where compr_fun is minimum
-        opt_fun_min_idx_xs = np.argmin(compr_fun, axis=1)
-
-        return opt_fun_min_idx_xs
 
 def get_returns_metrics(returns,strat_period='dayly'):
 
@@ -720,203 +559,6 @@ def compute_utility_factor(apply_utility_factor,tickers_returns, weights_in_df, 
 
     return weights_uty_df, metrics_p, rolling_metrics_dict, returns_p
 
-
-
-
-def get_log_history_NOK(bt_log_dict):
-    log_history = pd.DataFrame()
-
-def multiticker_df_to_log_df_nok(df):
-    df_stack = df.stack().reset_index(name='col')  # Stack the dataframe to long format
-    df_stack = df_stack.loc[~df_stack['col'].isin(['None', np.nan])].reset_index(drop=True)  # Remove 'None'
-    log_df = pd.DataFrame()
-    log_df[['date', 'ticker', 'col']] = df_stack[['level_0', 'level_1', 'col']]
-    return log_df
-
-def multiticker_df_to_log_df(df):
-    """Converts a DataFrame with instrument columns (ES=F, NQ=F, etc.) to a long format DataFrame.
-
-    Args:
-        df: A pandas DataFrame with instrument columns as data and dates as index.
-
-    Returns:
-        A pandas DataFrame with columns 'date', 'ticker', and 'col' in long format.
-    """
-    # Replace 'None' by nan
-
-    # Stack with explicit dropna for 'col' column
-    df_stack = df.stack().reset_index(name='col').dropna(subset=['col']).query("col != 'None'")
-
-    # Assign column names directly
-    log_df = df_stack[['level_0', 'level_1', 'col']]
-
-    # Rename columns for clarity (optional)
-    log_df.columns = ['date', 'ticker', 'col']
-
-    # Set index to range starting from 0
-    log_df.index = range(len(log_df))
-
-    return log_df
-
-    log_history[['date', 'ticker', 'B_S']] = multiticker_df_to_log_df(bt_log_dict['order_dict']['B_S'])
-    for key in ['exectype', 'status']:
-        log_history[key] = multiticker_df_to_log_df(bt_log_dict['order_dict'][key]).iloc[:, -1]
-
-    print(log_history)
-
-    key = 'price'
-    df = bt_log_dict['order_dict'][key]
-    print(df)
-
-    # Assuming 'date' is the common column for merging
-    df_with_date = df.reset_index().rename(columns={'index': 'date'})  # Rename former index
-    merged_df = log_history.merge(df_with_date, how='left', on='date')
-    ticker_mask = merged_df['ticker'].isin(df.columns)  # Create a boolean mask
-    merged_df['price'] = merged_df[ticker_mask][df.columns].values  # Select matching prices
-    merged_df.loc[~ticker_mask, 'price'] = np.nan  # Fill non-matching with NaN (optional)
-    merged_df.drop(columns=df.columns, inplace=True)  # Optional: Remove 'ticker' if not needed
-
-    print(merged_df)
-
-def compute_mkwtz_vectorized_local_w_trading_cost(markowitz_data_dict, metrics=True):
-
-    #Get Metrics from dict
-    returns,xs,volatility_xs,ddn_xs_std,volat_xs_std,cagr_xs,hold_cost_xs, penalties_xs=\
-        [markowitz_data_dict[k] for k in
-         ['returns','xs','volatility_xs','ddn_xs_std','volat_xs_std','cagr_xs','hold_cost_xs','penalties_xs']]
-
-    # Get Function to minimize
-    risk_xs=volatility_xs/2 + ddn_xs_std + volat_xs_std
-    opt_fun_xs = risk_xs - cagr_xs  + penalties_xs #+ hold_cost_xs
-
-    #Initialize trading cost
-    trading_cost_xs=np.zeros(opt_fun_xs.shape)
-
-    #Cum Returns
-    cum_ret_xs=np.array((1+pd.DataFrame(returns)).cumprod())
-
-    def get_opt_weights(opt_fun_xs,trading_cost_xs,cum_ret_xs):
-
-        #Update opt_fun_xs with trading_cost
-        opt_fun_xs=opt_fun_xs + trading_cost_xs
-
-        # Localize minimum
-        opt_fun_min_idx_xs = np.argmin(opt_fun_xs, axis=1)
-
-        # Get weights of this minimum
-        weights = xs[opt_fun_min_idx_xs]
-
-        # Save weights as df
-        weights_df = pd.DataFrame(weights, index=returns.index, columns=returns.columns)
-
-        def get_trading_cost(weights,gamma_trade=1/500):
-        #Weights difference
-            #weights_diff=(weights_df-weights_df.shift(1)).abs().sum(axis=1)
-            # Reshape xs using tile
-            xs_res = np.tile(xs, (weights.shape[0], 1, 1))
-            #Previous Weights
-            prev_weights=np.roll(weights, -1, axis=1)
-            # Reshape weights
-            prev_weights_res = prev_weights.reshape(-1, 1, weights.shape[1])
-            #get difference
-            weights_diff = np.absolute(xs_res-prev_weights_res)
-
-            #Trading Cost
-
-            # Reshape cum_ret_xs to add a new dimension of 1 at the end
-            reshaped_cum_ret_xs = cum_ret_xs[:, np.newaxis, :]
-            trading_size=weights_diff*reshaped_cum_ret_xs
-            trading_cost_xs=np.sum(gamma_trade*trading_size,axis=-1)
-
-            return trading_cost_xs
-
-        trading_cost_xs = get_trading_cost(weights,gamma_trade=1/500)
-
-        # Save Metrics
-        if metrics:
-
-            # Metrics of this mimimum
-            metrics_opt_df = pd.DataFrame(index=returns.index)
-            metrics_opt_df['volat'] = np.take_along_axis(volatility_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
-            metrics_opt_df['ret'] = np.take_along_axis(cagr_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
-            metrics_opt_df['opt_fun'] = np.take_along_axis(opt_fun_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten()
-
-            # All xs Metrics
-            metrics_xs_dict = {'volatility_xs': volatility_xs, 'cagr_xs': cagr_xs}
-
-        else:
-            metrics_xs_dict = None
-            metrics_opt_df = None
-
-        return weights_df,trading_cost_xs,opt_fun_min_idx_xs, metrics_opt_df, metrics_xs_dict
-
-    #Loop to get weights df
-    error_w,i=1,0
-    weights_df = pd.DataFrame(index=returns.index, columns=returns.columns).fillna(0)
-    #for i in range(20):
-    while (error_w>0) & (i<10):
-        prev_weights_df=weights_df
-        weights_df, trading_cost_xs, opt_fun_min_idx_xs, metrics_opt_df, metrics_xs_dict = get_opt_weights(opt_fun_xs,trading_cost_xs,cum_ret_xs)
-
-        error_w=abs(weights_df-prev_weights_df).sum().sum()
-        i += 1
-
-        #trading_cost_sum=np.sum(np.take_along_axis(trading_cost_xs, np.expand_dims(opt_fun_min_idx_xs, axis=-1), axis=1).flatten())
-        print(i,error_w)
-
-    return weights_df, metrics_opt_df, metrics_xs_dict
-
-def keep_bmrk_when_volat_is_low (tickers_returns, settings,weights_df,returns_p,metrics_df,rolling_metrics_dict,volatility_tresh=0.11):
-    settings['tickers_bounds']= {'ES=F': (0,1), 'NQ=F': (0,1), 'GC=F': (0.00,0.2), 'CL=F': (0,0.0), 'EURUSD=X': (0,0.0)} # {'ES=F': (0,0.5), 'NQ=F': (-0,0.5), 'GC=F': (0.00,0.5), 'CL=F': (0,0.25), 'EURUSD=X': (-0.00,0.0)}
-    weights_es_df, returns_es_p, _, _ = compute_markowitz_loop_over_ps(tickers_returns, settings)
-    volat_es=tickers_returns['ES=F'].rolling(44,min_periods=10).std()*16
-    volat_es_is_low=volat_es.shift(1)<volatility_tresh
-    k=1.25
-    weights_df.where(~volat_es_is_low,weights_es_df*k,inplace=True)
-    returns_p.where(~volat_es_is_low, returns_es_p*k, inplace=True)
-    # Strategy Results
-    strategy_returns = get_strategy_returns(weights_df, tickers_returns)
-    m, rolling_metrics_dict['low_vix_filter']=get_returns_metrics(strategy_returns)
-    metrics_df['low_vix_filter']=m.T
-
-    return weights_df,returns_p, metrics_df, rolling_metrics_dict
-
-def plot_rolling_metrics_dict(rolling_metrics_dict):
-    key = list(rolling_metrics_dict.keys())[-1]
-    plot_df = rolling_metrics_dict[key][['cum_ret','rolling_utility','utility_factor']].shift(1)
-    plot_df['utility_factor'] *= 5
-    plot_df .plot(title='utility_factor')
-
-def end_of_week_data(df):
-    """
-    Get Weekly Last Data available on Friday or inmediatelly available before if Friday Holiday
-    :param df:
-    :return: weekly_df
-    """
-    # Create Calendar Dates
-    start = df.index[0]
-    end = df.index[-1]
-    calendar_dates=pd.date_range(start, end)
-
-    # Create date of last data available
-    date_of_last_data = df.index.to_series().reindex(calendar_dates).fillna(method='ffill')
-
-    #Keep Fridays date of last data available
-    weekly_date_of_last_data = date_of_last_data.resample('W-FRI').last()
-
-    #Get data for this dates
-    weekly_df=df.loc[weekly_date_of_last_data,:]
-
-    #Drop duplicates
-    non_duplicate_indices = ~weekly_df.index.duplicated(keep='first')  # Change 'first' to 'last' if needed
-    weekly_df = weekly_df.loc[non_duplicate_indices]
-
-    #Drop rows where NaN
-    weekly_df=weekly_df.dropna()
-
-    return weekly_df
-
-
 def get_strategy_returns(weights, returns):
     # Start
     # Get the first index where any weight is greater than zero (using any)
@@ -971,68 +613,8 @@ def set_limit_to_weights_sum(weights_df,weight_sum_lim):
 
     return weights_df
 
-def get_rolling_min_expected(df, w=10):
-    mean = df.rolling(w, min_periods=5).mean()
-    std = df.rolling(w, min_periods=5).std()
-    min_expected = mean - 2 * std
-    return min_expected
-
-def get_opt_fun_predition_accuracy(opt_fun_xs):
-    """
-    Prediction= Yesterday Value
-    Error = abs(Actual Value-Prediction)
-    Accuracy=1-Error/Error_Max  (n-days,n_xs_combinations) float(0 to 1)
-
-    Input:
-        opt_fun_xs: array(n-days,n_xs_combinations)
-
-    Output:
-        accuracy_opt_fun_xs:array(n-days,n_xs_combinations) float(0 to 1)
-    """
-
-    # convert to Dataframe  for easier data manipulation
-    opt_fun_xs_df = pd.DataFrame(opt_fun_xs)
-
-    # Calculate Error = abs(Actual Value-Prediction)
-    error=opt_fun_xs_df.diff().abs()
-
-    #Normalize Error by rolling max
-    error_max = error.rolling(250,min_periods=1).max().max()
-    error_norm=error/error_max # float (0 to 1)
-
-    #Get Accuray
-    accuracy= 1 - error_norm
-
-    # Get Min Accuray Expected
-    accuracy_expected =get_rolling_min_expected(accuracy,w=10)
-    accuracy_expected = get_rolling_min_expected(accuracy_expected,w=10)
-    accuracy_expected.clip(lower=0, inplace=True)
-    accuracy_expected= accuracy_expected.fillna(0)
-
-    #Plot Debug
-    (accuracy.loc[:, 0:10]).plot(title='Accuracy')
-    (accuracy_expected.loc[:, 0:10]).plot(title='Accuracy Expected')
-
-    #Convert df to np.array
-    accuracy_expected_array=np.array(accuracy_expected)
-
-    return accuracy_expected_array
 
 
 
-def get_regime_mask(returns, window=20):
-    """
-    Returns 1.0 for High Volatility (Panic) and 0.0 for Low Volatility (Calm).
-    """
-    # Use first ticker volatility as the regime signal
-    vol_feature = returns.iloc[:, 0].rolling(window).std() * np.sqrt(252)
-    vol_feature = vol_feature.fillna(method='bfill').values.reshape(-1, 1)
-
-    # Fit GMM and identify High Vol state
-    gmm = GaussianMixture(n_components=2, random_state=42).fit(vol_feature)
-    states = gmm.predict(vol_feature)
-    high_vol_idx = np.argmax(gmm.means_.flatten())
-
-    return (states == high_vol_idx).astype(float)
 
 

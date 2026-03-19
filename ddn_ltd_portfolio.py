@@ -26,11 +26,11 @@ class DDNLimitedPortfolio:
         rolling_max = cumulative.rolling(window=window, min_periods=1).max()
         return (cumulative / rolling_max) - 1
 
-    def get_ddn_penalty(self, tickers_returns):
+    def get_ddn_penalty(self, tickers_ret):
         s = self.settings
 
         # 1. Risk Prediction (3 x  DDN Std )
-        self.drawdown_df = self._get_drawdown(tickers_returns, s['ddn_w'])
+        self.drawdown_df = self._get_drawdown(tickers_ret, s['ddn_w'])
         self.risk_metric = 3 * self.drawdown_df.rolling(s['ddn_std_w']).std()
 
         # 2. Risk Ratio & Penalty Function
@@ -38,18 +38,18 @@ class DDNLimitedPortfolio:
         # The x^4 penalty creates an aggressive 'exit' signal
         self.penalty = (1 / (0.5 + self.risk_ratio) ** 4).clip(upper=1).fillna(1)
 
-    def compute_weights(self, tickers_returns):
+    def compute_weights(self, tickers_ret):
         """
         Calculates the portfolio weights based on CAGR momentum
         and the Drawdown/Volatility risk blend.
         """
         s = self.settings
 
-        self.get_ddn_penalty(tickers_returns)
+        self.get_ddn_penalty(tickers_ret)
 
         # 3. CAGR Utility (Arithmetic mean based on window)
-        cagr = tickers_returns.rolling(s['d_cagr_w']).mean() * 252
-        cagr_fast=tickers_returns.rolling(22).mean() * 252
+        cagr = tickers_ret.rolling(s['d_cagr_w']).mean() * 252
+        cagr_fast=tickers_ret.rolling(22).mean() * 252
         fast_k=0.05
         returns=((1-fast_k)*cagr+fast_k*cagr_fast)
         self.utility = returns.clip(lower=0, upper=1)
