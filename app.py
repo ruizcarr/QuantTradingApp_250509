@@ -15,9 +15,6 @@ import Market_Data_Feed as mdf
 
 import copy
 
-# Suppress 'Arial not found' warning from matplotlib/quantstats on Linux
-import matplotlib
-matplotlib.rcParams['font.family'] = 'DejaVu Sans'
 
 # Update Settings
 # Import Trading Settings
@@ -501,6 +498,15 @@ def load_and_compute_data(**settings_kwargs):
 
 def compute_qstats(bt_log_dict, closes, add_days, exchange_rate):
     from Backtest_Class import bt_qstats_report
+    import matplotlib
+    import logging
+
+    # Force font before quantstats generates any figure
+    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+
+
+
     q_returns, q_title, q_benchmark, q_benchmark_ticker, q_filename = bt_qstats_report(bt_log_dict, closes, add_days, exchange_rate)
 
     import streamlit.components.v1 as components
