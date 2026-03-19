@@ -272,7 +272,7 @@ def display_portfolio_positions(eod_log_history, trading_history, last_trade_dat
                 cum_ret = (1 + returns.iloc[-w - settings['add_days']:-settings['add_days']]).cumprod()
                 alt_chart1 = chart_ts_altair(cum_ret_by_ticker, ticker, st_altair_chart=False)
                 alt_chart2 = chart_ts_altair(cum_ret, ticker, color="grey", st_altair_chart=False)
-                st.altair_chart(alt_chart1 + alt_chart2, use_container_width=True)
+                st.altair_chart(alt_chart1 + alt_chart2, width='stretch')
 
 
     return exchange_rate
@@ -319,7 +319,7 @@ y=alt.Y(col, title='', scale=alt.Scale(domain=[ts[col].min(),ts[col].max()]))
 )
 
     if st_altair_chart:
-        st.altair_chart(alt_chart,use_container_width=True )
+        st.altair_chart(alt_chart,width='stretch' )
 
     return alt_chart
 
