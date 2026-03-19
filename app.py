@@ -15,6 +15,10 @@ import Market_Data_Feed as mdf
 
 import copy
 
+# Suppress 'Arial not found' warning from matplotlib/quantstats on Linux
+import matplotlib
+matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+
 # Update Settings
 # Import Trading Settings
 settings['verbose'] = False
