@@ -22,8 +22,7 @@ warnings.filterwarnings('ignore')
 
 
 import Market_Data_Feed as mdf
-from Backtest_Class import compute_backtest_vectorized
-#from Backtest_Vectorized import compute_backtest_vectorized
+from Backtest_Class import compute_backtest
 from Training_Markowitz import process_log_data,apply_pos_constrain
 
 # Import Trading Settings
@@ -64,7 +63,7 @@ def compute(settings,data_ind):
     #Cash BackTest with Backtrader
     if settings['do_BT'] :
         if verbose: print('\nCash BackTest with Backtrader ')
-        bt_log_dict, log_history = compute_backtest_vectorized(positions, settings, data.data_dict)
+        bt_log_dict, log_history = compute_backtest(positions, settings, data.data_dict)
 
         #Get End Of Day Values
         settings['tickers']=list(positions.columns)

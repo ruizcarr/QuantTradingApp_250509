@@ -38,6 +38,43 @@ class DDNLimitedPortfolio:
         # The x^4 penalty creates an aggressive 'exit' signal
         self.penalty = (1 / (0.5 + self.risk_ratio) ** 4).clip(upper=1).fillna(1)
 
+    def apply_constraints(self,weights, s):
+
+        # Ticker-specific caps (e.g., Crypto/Risky assets)
+        for ticker in s['d_risky_tickers']:
+            if ticker in weights.columns:
+                weights[ticker] = weights[ticker] / 2
+                weights[ticker] = weights[ticker].clip(upper=s['d_max_risky_tickers_weight'])
+
+        # Cash Bonus
+        if 'cash' in weights.columns:
+            weights['cash'] = weights['cash'] * 3
+
+        # Global asset caps
+        weights = weights.clip(upper=s['d_max_asset_weight'])
+
+        # Excluded Tickers
+        available_excl = [t for t in s['d_excluded_tickers'] if t in weights.columns]
+        weights[available_excl] = 0
+
+        # Apply fix_mult
+        final_weights = (weights * s['d_fix_mult'])
+
+        # 6. Total Leverage Guard (The "Safety Valve")
+        if 'd_max_total_leverage' in s:
+            # Calculate the sum of weights for each day
+            current_total_leverage = final_weights.sum(axis=1)
+
+            # Determine the scaling factor:
+            # If current leverage is 2.0 and max is 1.0, factor is 2.0.
+            # We clip at lower=1.0 so we never "scale up" a small portfolio.
+            scaling_factor = (current_total_leverage / s['d_max_total_leverage']).clip(lower=1.0)
+
+            # Divide all weights by that factor to bring the total down to the cap
+            final_weights = final_weights.div(scaling_factor, axis=0)
+
+            return final_weights
+
     def compute_weights(self, tickers_ret):
         """
         Calculates the portfolio weights based on CAGR momentum
@@ -65,43 +102,16 @@ class DDNLimitedPortfolio:
         # 5. Apply Constraints & Scaling
         weights = utility_final.copy() #Create weights df
 
-        # Ticker-specific caps (e.g., Crypto/Risky assets)
-        for ticker in s['d_risky_tickers']:
-            if ticker in weights.columns:
-                weights[ticker] = weights[ticker] / 2
-                weights[ticker] = weights[ticker].clip(upper=s['d_max_risky_tickers_weight'])
 
-        #Cash Bonus
-        if 'cash' in weights.columns:
-            weights['cash'] = weights['cash']*3
 
-        # Global asset caps
-        weights = weights.clip(upper=s['d_max_asset_weight'])
-
-        #Excluded Tickers
-        available_excl = [t for t in s['d_excluded_tickers'] if t in weights.columns]
-        weights[available_excl] = 0
-
-        # Apply fix_mult
-        self.final_weights = (weights * s['d_fix_mult'])
-
-        # 6. Total Leverage Guard (The "Safety Valve")
-        if 'd_max_total_leverage' in s:
-            # Calculate the sum of weights for each day
-            current_total_leverage = self.final_weights.sum(axis=1)
-
-            # Determine the scaling factor:
-            # If current leverage is 2.0 and max is 1.0, factor is 2.0.
-            # We clip at lower=1.0 so we never "scale up" a small portfolio.
-            scaling_factor = (current_total_leverage / s['d_max_total_leverage']).clip(lower=1.0)
-
-            # Divide all weights by that factor to bring the total down to the cap
-            self.final_weights = self.final_weights.div(scaling_factor, axis=0)
+        self.final_weights = self.apply_constraints(weights,s)
 
         # 7. Shift to avoid lookahead bias
         self.final_weights = self.final_weights.shift(1).fillna(0)
 
         return self.final_weights
+
+
 
     @property
     def total_leverage(self):

@@ -996,7 +996,7 @@ class Indicators:
         self.rsi_sigmoid_weight=self.rsi_sigmoid(self.rsi)
 
         #Euribor Indicator Weights
-        from Bin.EuriborCorrStudy import get_Euribor_ind
+        from EuriborCorrStudy import get_Euribor_ind
         # Retrieve Training model and get Euribor Ind
 
         Euribor_series = cash_returns['cash'] * 255 * 100

@@ -22,7 +22,7 @@ class BacktestSettings:
     commision: float = 5.0
     buy_at_market: bool = False
     portfolio_window: int = 22 * 12
-    min_periods: int = 1
+    min_periods: int = 22
 
 
 class Backtest:
@@ -31,7 +31,7 @@ class Backtest:
     def __init__(self, settings: BacktestSettings):
         self.settings = settings
 
-    def compute_backtest_sequential(
+    def compute_backtest_loop(
             self,
             weights_div_asset_price: pd.DataFrame,
             asset_price: pd.DataFrame,
@@ -287,7 +287,7 @@ class Backtest:
         return pos_df, port_usd_series, bt_log_dict
 
 
-def compute_backtest_vectorized(
+def compute_backtest(
         positions: pd.DataFrame,
         settings: Dict,
         data_dict: Dict
@@ -342,7 +342,7 @@ def compute_backtest_vectorized(
     backtest = Backtest(backtest_settings)
 
     # Single sequential pass — futures only
-    pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_sequential(
+    pos, portfolio_value_usd, bt_log_dict = backtest.compute_backtest_loop(
         weights_div_asset_price, asset_price,
         opens_futures, highs_futures, lows_futures, closes_futures,
         mults_array_futures, positions_futures,

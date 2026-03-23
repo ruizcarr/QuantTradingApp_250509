@@ -10,7 +10,6 @@ from datetime import timedelta
 from utils import weighted_mean_of_dfs_dict
 #from namespace import Namespace
 
-from Backtest_Class import compute_backtest_vectorized
 import Market_Data_Feed as mdf
 
 np.random.seed(1234)

@@ -10,11 +10,7 @@ settings =retrieve_training_settings()
 
 # Update Settings to Trading Settings
 settings['trading_app_only']=True
-settings['start'] = '2018-01-01' #'2020-01-01' # '2019-01-01'
+settings['start'] = '2017-01-01' #'2020-01-01' # '2019-01-01'
 settings['end'] =(date.today() + timedelta(days=1)).isoformat()
-settings['startcash'] = 150000 #200000#240000 #47000 #56500#210000#35000 #30650 #27800 #54300 #52300 # #EUR
-#settings['verbose'] = True
-#settings['qstats'] = True
-#settings['do_BT']= True
-#settings['offline'] = False
-#settings['add_cash'] = True
+settings['startcash'] = 95000 #200000#240000 #47000 #56500#210000#35000 #30650 #27800 #54300 #52300 # #EUR
+

@@ -39,7 +39,7 @@ settings={
     'w_lower_lim': -0.1,  # Individual Lower Weight Limit
      'w_min_lim' : 0.015,  # keep the value if |individual position| >= threshold, otherwise set to 0
     'pos_exp_factor': 0.95,#0.90 #1.05 # Position Exponential factor; positions = positions ** settings['pos_exp_factor']
-    'pos_mult_factor': 1.90, #1.75 #1.2, #1.5,#1.25, #1.15 # Position Multiplicative factor; positions = positions * settings['pos_mult_factor']
+    'pos_mult_factor': 1.95, #1.75 #1.2, #1.5,#1.25, #1.15 # Position Multiplicative factor; positions = positions * settings['pos_mult_factor']
     'apply_pos_constraints': True, #including volatility limited factor to avoid volatility peacks
 
     #Markowitz Windows Parameters [fast,mid,slow]
@@ -99,6 +99,10 @@ settings={
     'd_fix_mult': 1.0, #1.0 1.6
     'd_max_total_leverage': 1.00, #1.0
 
+    #Params for MinMax Mean Portfolio
+    'minmax_portfolio': True,
+    'minmax_w': 180,
+
     # --- Blend mode ---
     'blend_metric': 'fixed',  # 'fixed' | 'cagr' | 'sharpe' | 'mean' | 'utility'| 'markowitz'
 
@@ -106,6 +110,7 @@ settings={
     'scipy_blend_factor': 0.0,
     'vectorized_blend_factor': 0.35, #0.35
     'ddn_blend_factor': 0.65, #0.65
+    'minmax_blend_factor': 0.15, #0.65
 
 # --- Rolling metric params (used for 'cagr', 'sharpe', 'mean') ---
     'blend_window': 30,  # 22 lookback days

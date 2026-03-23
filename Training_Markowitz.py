@@ -122,9 +122,9 @@ def run(settings):
     start = time.time()
 
     if settings['do_BT'] :
-        from Backtest_Class import compute_backtest_vectorized
+        from Backtest_Class import compute_backtest
         settings['tickers'] = list(positions.columns)
-        bt_log_dict, log_history = compute_backtest_vectorized(positions, settings, data.data_dict)
+        bt_log_dict, log_history = compute_backtest(positions, settings, data.data_dict)
 
         # End Of day Values From Log History
         eod_log_history, trading_history = process_log_data(log_history, settings)

@@ -115,6 +115,11 @@ class Strategy:
             ddn_weights = portfolio_manager.compute_weights(st_tickers_returns)
             sources['ddn'] = (ddn_weights, settings.get('ddn_blend_factor', 1.0))
 
+        if settings['minmax_portfolio']:
+            from minmax_mean_portfolio import compute_minmax_mean_portfolio
+            minmax_weight, _, _, _, _ = compute_minmax_mean_portfolio(st_tickers_returns, settings)
+            sources['minmax'] = (minmax_weight, settings.get('minmax_blend_factor', 1.0))
+
         #Set comon start without zero weights
         sources = trim_sources_to_common_start(sources)
         common_start = next(iter(sources.values()))[0].index[0]
