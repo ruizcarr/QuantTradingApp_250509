@@ -11,6 +11,8 @@ import os
 
 import Market_Data_Feed as mdf
 
+from minmax_mean_portfolio import compute_minmax_mean_portfolio
+
 #Get Data
 data_ind = mdf.Data_Ind_Feed(t_settings).data_ind
 data, _ = data_ind
@@ -19,27 +21,13 @@ data_dict = data.data_dict
 tickers_returns=data.tickers_returns
 cum_rets=(1+tickers_returns).cumprod()
 
-def compute_minmax_mean_portfolio(tickers_returns,settings):
-    cum_rets = (1 + tickers_returns).cumprod()
-    #Compute Min, Max & Mean Bands
-    max_band = cum_rets.rolling(settings['minmax_w']).max()
-    min_band= cum_rets.rolling(settings['minmax_w']).min()
-    mean_minmax = (max_band+min_band)/2
-
-    #Compute Trend weights
-    rets_over_mean=cum_rets>mean_minmax
-    trend_weight=rets_over_mean.clip(lower=0)
-    trend_weight=trend_weight.rolling(5).mean()
-    trend_weight=trend_weight.shift(1).fillna(0)
-
-    #Filters & Fine Tunning
-    from ddn_ltd_portfolio import DDNLimitedPortfolio
-    portfolio_manager = DDNLimitedPortfolio(t_settings)
-    trend_weights = portfolio_manager.apply_constraints(trend_weight,t_settings)
-
-    return trend_weights,cum_rets,max_band,min_band,mean_minmax
-
 trend_weight,cum_rets,max_band,min_band,mean_minmax=compute_minmax_mean_portfolio(tickers_returns,t_settings)
+
+#Apply Strong Trend Boost & Penalty when repeated new max
+trend_change_counter=np.sign(max_band.diff()).rolling(10).sum()
+strong_trend_mask=trend_change_counter.shift(1)>=2
+strong_trend_boost=np.where(strong_trend_mask,1.5,0.5) #Best sharpe 1.25-1.4,0.5
+trend_weight=trend_weight*strong_trend_boost
 
 #BACKTEST
 trend_ret=tickers_returns*trend_weight
@@ -54,6 +42,9 @@ for ticker in tickers_returns.columns:
     plot_df['max_band'] = max_band[ticker]
     plot_df['min_band'] = min_band[ticker]
     plot_df['mean_minmax'] = mean_minmax[ticker]
+    plot_df['trend_change_counter'] = trend_change_counter[ticker]
+    #plot_df['lateral_ind'] = lateral_ind[ticker]
+    plot_df['strong_trend_mask'] = strong_trend_mask[ticker]*1
 
     plot_df['trend_weight'] = trend_weight[ticker]
     plot_df['trend_cumret'] = trend_cumret[ticker]

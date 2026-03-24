@@ -10,13 +10,13 @@ def compute_minmax_mean_portfolio(tickers_returns,settings):
 
     #Compute Trend weights
     rets_over_mean=cum_rets>mean_minmax*1.03
-    trend_weight=rets_over_mean.clip(lower=0)
-    trend_weight=trend_weight.rolling(22).mean()
-    trend_weight=trend_weight.shift(1).fillna(0)
+    trend_weights=rets_over_mean.clip(lower=0)
+    trend_weights = trend_weights.rolling(22).mean()
+    trend_weights = trend_weights.shift(1).fillna(0)
 
     #Filters & Fine Tunning
     from ddn_ltd_portfolio import DDNLimitedPortfolio
     portfolio_manager = DDNLimitedPortfolio(settings)
-    trend_weights = portfolio_manager.apply_constraints(trend_weight,settings)
+    trend_weights = portfolio_manager.apply_constraints(trend_weights,settings)
 
     return trend_weights,cum_rets,max_band,min_band,mean_minmax
