@@ -20,7 +20,7 @@ settings={
 
     #Settings for Portfolio Optimization
     #'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.3)}, #
-    'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.0)}, #
+    'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.00),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.0)}, #
     'volatility_target': 0.11,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115
 
     #Settings for Cash Back Test
@@ -93,9 +93,9 @@ settings={
     'd_cagr_w': 180,  # 180
     'lower_ddn_limit': 0.14,  #0.14 0.15 # by asset
     'd_max_asset_weight': 0.20,  #0.20 # beffore mult
-    'd_risky_tickers': ['BTC-USD','EURUSD=X','CL=F'],
+    'd_risky_tickers': ['BTC-USD','CL=F'],
     'd_max_risky_tickers_weight': 0.10,
-    'd_excluded_tickers': [ 'ES=F'], #,'ES=F'
+    'd_excluded_tickers': [ 'ES=F','EURUSD=X'], #,'ES=F'
     'd_fix_mult': 1.0, #1.0 1.6
     'd_max_total_leverage': 1.00, #1.0
 
