@@ -104,40 +104,24 @@ settings={
     'minmax_w': 180,
 
     # --- Blend mode ---
-    'blend_metric': 'fixed',  # 'fixed' | 'cagr' | 'sharpe' | 'mean' | 'utility'| 'markowitz'
+    #'blend_metric': 'fixed',  # 'fixed'
 
-# --- Per-source fixed factors (only used when blend_metric == 'fixed') ---
+# Per-source fixed factors
     'scipy_blend_factor': 0.0,
     'vectorized_blend_factor': 0.35, #0.35
     'ddn_blend_factor': 0.65, #0.65
     'minmax_blend_factor': 0.15, #0.65
-
-# --- Rolling metric params (used for 'cagr', 'sharpe', 'mean') ---
-    'blend_window': 30,  # 22 lookback days
-    'blend_min_periods': 5,  # min days before rolling factors activate
-    'blend_lambda': 2.0,  # 0.65 vol penalty at utility=cagr-volatility*'blend_lambda']
-                                        #   < 1.0  → more return-seeking
-                                        #   1.0    → balanced
-                                        #   > 1.0  → more risk-averse
-                                        #   2.0    → standard mean-variance utility
-
-    'use_benchmark': False,
-    'benchmark_tickers': ['ES=F', 'NQ=F', 'GC=F'],
-    'benchmark_ticker_weights': {'ES=F': 0.0, 'NQ=F': 0.5, 'GC=F': 0.5},  # {'ES=F': 0.25, 'NQ=F': 0.45, 'GC=F': 0.30}custom split
-    'benchmark_vol_offset': 0.07,  # 0.07
-    'benchmark_weight_scale': 0.6,  # 0.80
-    'benchmark_fixed_factor': 0.0,  # only if blend_metric == 'fixed'
 
     # Default Settings
     'trading_app_only': False,
     'weekly_trading_only': False,
     'apply_opt_fun_predict_factor':False, #Apply opt_fun Predictibity factor. Better when Prediction is good
     'apply_strategy_weights': True,  # Apply RSI and other additional Strategy Weights of top of Markowitz weights
-    'raw_weight_pct': 0.40,  # Portion of raw weight keep without apply factor
-     #'apply_strategy': True,  #Apply Strategy Weights at Porfolio Optimized Weights
+    'raw_weight_pct': 0.4,  #0.40 Portion of raw weight keep without apply factor
+    'apply_strategy': True,  #Apply Strategy Weights at Porfolio Optimized Weights
     'use_train_csv': False,  # Use train csv for test without recalculate train again
-    'apply_tickers_returns_EUR': False,  #Assets in EUR before Training & Test
-    'apply_post_opt_in_EUR': False,  # Portfolio Returns in EUR before Post Optimization
+    #'apply_tickers_returns_EUR': False,  #Assets in EUR before Training & Test
+    #'apply_post_opt_in_EUR': True,  # Portfolio Returns in EUR before Post Optimization
     'qstats': True,  #Plot html quantstats summary
     'verbose': True,
     'do_annalytics': True,
