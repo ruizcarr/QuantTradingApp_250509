@@ -11,7 +11,7 @@ import os
 
 import Market_Data_Feed as mdf
 
-from minmax_mean_portfolio import compute_minmax_mean_portfolio
+from minmax_mean_portfolio import compute_minmax_mean_portfolio,compute_trend_weights
 
 #Get Data
 data_ind = mdf.Data_Ind_Feed(t_settings).data_ind
@@ -19,15 +19,15 @@ data, _ = data_ind
 data_dict = data.data_dict
 
 tickers_returns=data.tickers_returns
-cum_rets=(1+tickers_returns).cumprod()
 
+raw_trend_weights,mean_minmax, cum_rets, max_band, min_band =compute_trend_weights(tickers_returns, t_settings)
 trend_weight,cum_rets,max_band,min_band,mean_minmax=compute_minmax_mean_portfolio(tickers_returns,t_settings)
 
 #Apply Strong Trend Boost & Penalty when repeated new max
 trend_change_counter=np.sign(max_band.diff()).rolling(10).sum()
 strong_trend_mask=trend_change_counter.shift(1)>=2
 strong_trend_boost=np.where(strong_trend_mask,1.5,0.5) #Best sharpe 1.25-1.4,0.5
-trend_weight=trend_weight*strong_trend_boost
+#trend_weight=trend_weight*strong_trend_boost
 
 #BACKTEST
 trend_ret=tickers_returns*trend_weight
@@ -35,6 +35,8 @@ trend_ret['sum']=(tickers_returns*trend_weight).sum(axis=1)
 trend_cumret=(1+trend_ret).cumprod()
 
 #Plots
+print(raw_trend_weights)
+
 for ticker in tickers_returns.columns:
 
     plot_df=pd.DataFrame()
@@ -42,9 +44,10 @@ for ticker in tickers_returns.columns:
     plot_df['max_band'] = max_band[ticker]
     plot_df['min_band'] = min_band[ticker]
     plot_df['mean_minmax'] = mean_minmax[ticker]
-    plot_df['trend_change_counter'] = trend_change_counter[ticker]
+    plot_df['raw_trend_weights'] = raw_trend_weights[ticker]
+    #plot_df['trend_change_counter'] = trend_change_counter[ticker]
     #plot_df['lateral_ind'] = lateral_ind[ticker]
-    plot_df['strong_trend_mask'] = strong_trend_mask[ticker]*1
+    #plot_df['strong_trend_mask'] = strong_trend_mask[ticker]*1
 
     plot_df['trend_weight'] = trend_weight[ticker]
     plot_df['trend_cumret'] = trend_cumret[ticker]

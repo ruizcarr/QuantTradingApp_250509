@@ -75,13 +75,14 @@ def compute(settings,data_ind):
             #print("tickers_returns\n", data.tickers_returns.tail(15))#[:-5]
 
             print("positions\n", positions.tail(10))
-            print("eod_log_history\n", eod_log_history.tail(10))
+            print("eod_log_history\n", eod_log_history.tail(20))
 
 
             yesterday = pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
             weekago= pd.Timestamp.today().normalize() - pd.Timedelta(days=7)
             two_weekago = pd.Timestamp.today().normalize() - pd.Timedelta(days=14)
-            print("log_history\n", log_history[log_history["date_time"]>=two_weekago].tail(60))
+            one_monthago = pd.Timestamp.today().normalize() - pd.Timedelta(days=30)
+            print("log_history\n", log_history[log_history["date_time"]>=one_monthago])
 
             #print("log_history head\n", log_history.head(60))
 

@@ -102,6 +102,7 @@ settings={
     #Params for MinMax Mean Portfolio
     'minmax_portfolio': True,
     'minmax_w': 180,
+    'minmax_delta': 1.03, ##*1.03 -> 3% threshold over  minmax mean
 
     # --- Blend mode ---
     #'blend_metric': 'fixed',  # 'fixed'
@@ -110,7 +111,7 @@ settings={
     'scipy_blend_factor': 0.0,
     'vectorized_blend_factor': 0.35, #0.35
     'ddn_blend_factor': 0.65, #0.65
-    'minmax_blend_factor': 0.15, #0.65
+    'minmax_blend_factor': 0.15, #0.15
 
     # Default Settings
     'trading_app_only': False,

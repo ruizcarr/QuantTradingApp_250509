@@ -433,7 +433,6 @@ def compute_buy_sell_triggers(weights, opens, closes, lows, highs):
     weights_max = weights.shift(1).rolling(5).max()
     weights_dn  = weights.le(weights_max, axis=0)
 
-
     lows_up_threshold=compute_sell_volat_stop_price(closes, lows, delta=7) #6
     lows_up = lows.shift(1).ge(lows_up_threshold, axis=0)
 

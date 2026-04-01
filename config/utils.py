@@ -23,18 +23,6 @@ def settings_to_JASON (settings):
         json.dump(settings, f)
 
 
-def retrieve_training_settings_nok():
-
-    path = get_path()
-
-    # Import Settings
-    #with open(path+'training_settings.json', 'r') as f:
-    with open('config/training_settings.json', 'r') as f:
-        settings = json.load(f)
-
-
-    return settings
-
 def retrieve_training_settings():
     base_dir = os.path.dirname(__file__)  # directory where utils.py lives (config/)
     file_path = os.path.join(base_dir, "training_settings.json")
