@@ -116,13 +116,17 @@ def compute(settings,data_ind):
             #cum_ret_by_ticker.plot(title='cumulative returns')
 
             tickers_cumret=(1+tickers_returns).cumprod()
+            positions = positions.reindex(nc.index)
+
 
 
             plot_df2=pd.DataFrame()
             for col in nc.columns:
                 plot_df2['nc']=nc[col]
+                plot_df2['positions x 10'] = positions[col]*10
                 plot_df2['cum_ret'] = cum_ret_by_ticker[col]
                 plot_df2['ticker_cumret'] = tickers_cumret[col]
+
                 plot_df2.plot(title=col + ' Returns')
 
 

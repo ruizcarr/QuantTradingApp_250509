@@ -5,6 +5,7 @@ import pandas as pd
 import os.path
 import pandas_market_calendars as mcal
 
+
 import pytz
 
 import ta  # Make sure you have installed the 'ta' library (pip install ta)
@@ -34,6 +35,13 @@ pd.set_option('display.width', None)
 import warnings
 warnings.filterwarnings('ignore')
 
+from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+
+CACHE_PATH = Path('data/price_cache.parquet')
+CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)  # creates 'data/' folder if missing
+
 class Data_Ind_Feed:
     def __init__(self,settings):
 
@@ -58,18 +66,11 @@ class Data:
         # -----------------------------
         # 1️⃣ Load or download data_bundle
         # -----------------------------
-        #if not offline:
+        CACHE_PATH = Path('data/price_cache.parquet')
+        self.settings = settings
         self.yf_data_bundle(tickers, start, end, add_days)
+
         self.data_bundle_yf_raw=self.data_bundle.copy()
-        """
-        elif offline and os.path.isfile(self.db_file):
-            self.data_bundle = pd.read_csv(self.db_file, header=[0,1], index_col=0)
-            self.data_bundle.index = pd.to_datetime(self.data_bundle.index, errors='coerce')
-            self.data_bundle = self.data_bundle[~self.data_bundle.index.isna()]
-            self.data_bundle = self.data_bundle.sort_index()
-        else:
-            raise FileNotFoundError("Offline mode and no saved CSV available")
-        """
 
         #print("last data_bundle date after Load",self.data_bundle.index[-1])
 
@@ -195,101 +196,7 @@ class Data:
         #weights = compressed_weights.reindex(tickers_returns.index).ffill().fillna(0)
 
 
-    def yf_data_bundle_tz_isue(self, tickers, start, end,add_days=0):
-        """"Get Closes & Returns from yahoo finance
-                Save OHLC to tickers dict"""
-
-        # Get Data Bundle from yf
-        tickers_space_sep = " ".join(tickers)
-
-        data_bundle = yf.download(tickers_space_sep, start, end, group_by='ticker', progress=False)
-
-        #Alternate to avoid problems in stremlit
-        #data_bundle,_=download_data_ticker_by_ticker(tickers, start, end, delay_seconds=1, max_retries=5)
-
-        data_bundle=data_bundle.dropna()
-
-        if len(data_bundle) ==0:
-            raise ValueError("self.data_bundle is empty. Error at yahoo download")
-
-        # Convert the index to naive timestamps (no timestamps)
-        data_bundle.index = data_bundle.index.tz_localize(None)
-
-        # Drop duplicated in calse
-        data_bundle.drop_duplicates()
-
-        # Datetime Index
-        data_bundle.index = pd.to_datetime(data_bundle.index)
-
-        # Retrive data_bundle from csv and update if exist
-        if os.path.isfile(self.db_file):
-            data = pd.read_csv(self.db_file, header=[0,1], index_col=0)
-
-            # Ensure index is datetime
-            data.index = pd.to_datetime(data.index, errors='coerce', infer_datetime_format=True)
-
-            # Drop rows with invalid or missing dates
-            data = data[~data.index.isna()]
-
-            #data.index = pd.to_datetime(data.index)
-
-        #Update csv file data
-        updated_data_bundle= pd.concat([data, data_bundle])
-        updated_data_bundle = updated_data_bundle.loc[~updated_data_bundle.index.duplicated(keep='first')]
-        updated_data_bundle = updated_data_bundle.sort_index()
-
-        #Save to csv
-        updated_data_bundle.to_csv(self.db_file)
-
-        #Save for further use
-        self.data_bundle = data_bundle
-
-    def yf_data_bundle_refresh_issue(self, tickers, start, end, add_days=0):
-        """Get OHLC data from Yahoo Finance and store in self.data_bundle."""
-
-        tickers_space_sep = " ".join(tickers)
-
-        data_bundle = yf.download(
-            tickers_space_sep,
-            start=start,
-            end=end,
-            group_by="ticker",
-            progress=False
-        ).dropna()
-
-        if len(data_bundle) == 0:
-            raise ValueError("self.data_bundle is empty. Error at yahoo download")
-
-        # Normalize index (force tz-naive)
-        data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
-        data_bundle = data_bundle.drop_duplicates()
-
-        # --- Check if today's data is present ---
-        tz = pytz.timezone("Europe/Madrid")
-        today_date = datetime.now(tz).date()
-        if today_date not in data_bundle.index.date:
-            print(f"⚠️ No data for today {today_date}, last row is {data_bundle.index[-1].date()}")
-            # you could decide to:
-            # - leave as is (just warn)
-            # - or try fetching again with end=today+1
-
-        # --- Merge only for saving (offline cache) ---
-        if os.path.isfile(self.db_file):
-            data = pd.read_csv(self.db_file, header=[0, 1], index_col=0)
-            data.index = pd.to_datetime(data.index, utc=True).tz_convert(None)
-            data = data[~data.index.isna()]
-            merged = pd.concat([data, data_bundle])
-            merged = merged.loc[~merged.index.duplicated(keep="first")]
-            merged = merged.sort_index()
-        else:
-            merged = data_bundle
-
-        merged.to_csv(self.db_file)
-
-        # ✅ Keep *fresh* Yahoo data in memory
-        self.data_bundle = data_bundle
-
-    def yf_data_bundle(self, tickers, start, add_days=0, offline=False):
+    def yf_data_bundle_ok(self, tickers, start, add_days=0, offline=False):
         tz = pytz.timezone("Europe/Madrid")
         today = datetime.now(tz).date()
         yf_end = today + timedelta(days=1)  # end exclusive
@@ -308,81 +215,73 @@ class Data:
         data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
         data_bundle = data_bundle.drop_duplicates()
 
-        """
-        if offline and os.path.isfile(self.db_file):
-            # merge logic only for offline mode
-            saved = pd.read_csv(self.db_file, header=[0, 1], index_col=0)
-            saved.index = pd.to_datetime(saved.index, utc=True).tz_convert(None)
-            data_bundle = pd.concat([saved, data_bundle]).sort_index()
-            data_bundle = data_bundle.loc[~data_bundle.index.duplicated(keep="first")]
-        """
-
         self.data_bundle = data_bundle
         return data_bundle
 
-    def extended_data_OK(self, data_dict, start):
-        """Extend with  Historical Data if requested """
-        aka_dict = {'ES=F': '^GSPC', 'NQ=F': '^NDX', 'GC=F': 'GOLD', 'EURUSD=X': 'EURUSD', 'CL=F': 'OIL'}
-        tickers = list(data_dict.keys())
 
-        # Check if all Historical data files are available
-        h_tickers=[]
-        for tick in tickers:
-            if tick in aka_dict.keys():
-                h_tickers.append(aka_dict[tick])
-            else:
-                if tick in aka_dict.values():
-                    h_tickers.append(tick)
-                else:
-                    print(tick, 'has not Historical data file available !!!')
 
-        #h_tickers = [aka_dict[tick] for tick in tickers]
+    def yf_data_bundle(self, tickers, start, add_days=0, offline=False):
+        tz = pytz.timezone("Europe/Madrid")
+        today = datetime.now(tz).date()
+        yf_end = today + timedelta(days=1)  # end exclusive
 
-        # Get all tickers historical csv data in a dict
-        self.data_from_csv(h_tickers)
-        h_data_dict = self.data_dict_csv
+        if not self.settings.get('trading_app_only', False):
+            # ── TRAINING mode — full historical refresh ───────────────────────
+            logger.info("TRAINING mode: full historical refresh from Yahoo")
+            data_bundle = yf.download(
+                " ".join(tickers),
+                start=start,
+                end=yf_end,
+                group_by="ticker",
+                progress=False,
+                timeout=30
+            ).dropna()
 
-        # Start from where data is available
-        date_0 = max([min(df.index) for df in data_dict.values()])
+            data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
+            data_bundle = data_bundle.drop_duplicates()
 
-        # Start date from where data is available for all historical data h_data or Start
-        h_date_0 = max([max([min(df.index) for df in h_data_dict.values()]).isoformat(), start])
+            # Save full fresh cache
+            data_bundle.to_parquet(CACHE_PATH)
 
-        e_data_dict = {}
-        e_closes = pd.DataFrame()
+        else:
+            # ── TRADING mode — frozen history + rolling 5-day window ─────────
+            logger.info("TRADING mode: frozen history + last 5 days refresh")
 
-        for i, tick in enumerate(tickers):
-            h_tick = h_tickers[i]
-            h_data_tick = h_data_dict[h_tick]
-            data_tick = data_dict[tick]
+            if not CACHE_PATH.exists():
+                raise FileNotFoundError("No cache found. Run in TRAINING mode first (trading_app_only=False).")
 
-            # Repair data when new csv available
-            # self.repair_data(h_data_tick,h_tick)
+            cached = pd.read_parquet(CACHE_PATH)
+            freeze_date = pd.Timestamp(today - timedelta(days=5))
+            frozen = cached[cached.index < freeze_date]
 
-            # Slice historical data
-            h_data_tick = h_data_tick.loc[(h_data_tick.index >= h_date_0) & (h_data_tick.index < date_0)]
+            # Fetch only recent window
+            fresh_raw = yf.download(
+                " ".join(tickers),
+                start=freeze_date,
+                end=yf_end,
+                group_by="ticker",
+                progress=False,
+                timeout=30
+            ).dropna()
 
-            # Reindex as Bechmark
-            if i == 0:
-                idx_0 = h_data_tick.index
-            else:
-                h_data_tick = h_data_tick.reindex(idx_0).fillna(method='ffill')
+            fresh_raw.index = pd.to_datetime(fresh_raw.index, utc=True).tz_convert(None)
+            fresh_raw = fresh_raw.drop_duplicates()
 
-            # Get Extended Data: Concatenate Historical data with current data
-            e_data_tick = pd.concat([h_data_tick, data_tick])
+            # ── Sanity check — warn if frozen history was revised ─────────────
+            overlap = frozen.index.intersection(fresh_raw.index)
+            if not overlap.empty:
+                diff = (frozen.loc[overlap] - fresh_raw.loc[overlap]).abs()
+                suspicious = diff[diff > 0.01].dropna(how='all')
+                if not suspicious.empty:
+                    logger.warning(f"Yahoo revised frozen history on: {suspicious.index.tolist()}")
 
-            # Save data in dict
-            e_data_dict[tick] = e_data_tick
+            # Combine frozen + fresh
+            data_bundle = pd.concat([frozen, fresh_raw])
+            data_bundle = data_bundle[~data_bundle.index.duplicated(keep='last')]
+            data_bundle.to_parquet(CACHE_PATH)
 
-            # Get Closes
-            e_closes = pd.concat([e_closes, e_data_tick.Close], axis=1)
-
-        e_closes.columns = tickers
-
-        e_closes.index = pd.to_datetime(e_closes.index)
-
-        self.data_dict = e_data_dict
-        self.tickers_closes = e_closes
+        self.data_bundle = data_bundle
+        return data_bundle
 
     def extended_data(self, data_dict, start):
         """

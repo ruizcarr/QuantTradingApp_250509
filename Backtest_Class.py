@@ -25,6 +25,7 @@ class BacktestSettings:
     min_periods: int = 22
 
 
+
 class Backtest:
     """Sequential implementation of backtest logic."""
 
@@ -209,7 +210,7 @@ class Backtest:
                 if is_buy[t_idx] or is_sell[t_idx]:
                     bs = 'Buy' if is_buy[t_idx] else 'Sell'
                     etype = 'Market' if (is_buy[t_idx] and self.settings.buy_at_market) else 'Stop'
-                    o_time = date + pd.Timedelta(seconds=t_idx + 1)
+                    o_time = date + pd.Timedelta(seconds=t_idx + 1) + pd.Timedelta(hours=6)
                     e_time = (o_time + pd.Timedelta(seconds=10)
                               if etype == 'Market'
                               else o_time + pd.Timedelta(hours=10))
@@ -240,7 +241,7 @@ class Backtest:
                             'commision': round(float(np.abs(exec_size[t_idx]) * self.settings.commision), 2),
                         })
                     else:
-                        cancel_time = date + pd.Timedelta(hours=23, minutes=59)
+                        cancel_time = date + pd.Timedelta(days=1, hours=5, minutes=59, seconds=58)
                         broker_log.append({
                             'date_time': cancel_time,
                             'event': 'Canceled',
@@ -494,7 +495,7 @@ def create_log_history(bt_log_dict):
             'pre_portfolio_value', 'exchange_rate', 'ddn_eur', 'cash_eur'
         ]
     )
-    eod_df['date_time'] = pos.index + pd.Timedelta(days=0, hours=23, minutes=59, seconds=59)
+    eod_df['date_time'] = pos.index + pd.Timedelta(days=1, hours=5, minutes=59, seconds=59)
     eod_df[tickers]     = pos
     eod_df['event']     = 'End of Day'
 

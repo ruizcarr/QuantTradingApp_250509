@@ -32,6 +32,11 @@ settings={
     'commision': 5, #USD by B/S contract
     'max_n_contracts': 200,#maximum number of micro contracts allowed to hold
 
+    'ETF_TICKERS': ['NQ=F', 'ES=F', 'GC=F'], #Tickers to be hold partially as ETF
+    'ETF_CONTRACTS_LIMIT': 2, #2 Number of Contracts equivalent amount of cash  hold
+    'MARGIN_RATE': 0.10,
+    'MIN_EURIBOR': 0.001,
+
     #Exposition Constraints
     'w_sum_max': 2.5,  # 2.5, Max sum of weights at markovitz calc
     'exposition_lim': 2.5, #Max exposition allowed aka Max strategy_pos sum. When no futures set to 1
