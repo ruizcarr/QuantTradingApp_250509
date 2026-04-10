@@ -100,17 +100,6 @@ def run(settings):
 
         #print("Pos Constraints Positions\n", positions.tail(10))
 
-    #Get DDN Ltd Portfolio
-    # Import your specific class from your new file
-    from ddn_ltd_portfolio import DDNLimitedPortfolio
-
-    # Initialize the Class
-    portfolio_manager = DDNLimitedPortfolio(settings)
-
-    # Generate the Weights
-    # This runs the math and stores the intermediates inside the object
-    ddn_weights = portfolio_manager.compute_weights(tickers_returns)
-
 
     end = time.time()
     times['test'] = round(end - start, 3)
@@ -213,7 +202,8 @@ def process_log_data(log_history,settings):
     log_history['ddn_eur'] = round(1 - max_portfolio_value_eur / log_history['portfolio_value_eur'], 3)
 
     #End of day Portfolio data
-
+    # Fix: subtract 6 hours before extracting date so 05:59 → previous day
+    log_history['date'] = (log_history['date_time'] - pd.Timedelta(hours=6)).dt.date
     eod_log_history=log_history.drop_duplicates(subset='date', keep='last').set_index('date')[tickers+["portfolio_value","portfolio_value_eur","pos_value","ddn","exchange_rate" , "dayly_profit","dayly_profit_eur"]]
 
     # Add Drawdown YTD EUR

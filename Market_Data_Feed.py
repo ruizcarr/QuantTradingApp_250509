@@ -42,11 +42,12 @@ logger = logging.getLogger(__name__)
 CACHE_PATH = Path('data/price_cache.parquet')
 CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)  # creates 'data/' folder if missing
 
+
+
 class Data_Ind_Feed:
     def __init__(self,settings):
 
-
-        # Get Data Instance
+         # Get Data Instance
         self.data=Data(settings,settings['tickers'],settings['start'],settings['end'],settings['add_days'],settings['offline'])
 
         #Get Indicators Instance
@@ -63,10 +64,10 @@ class Data:
         self.path = "datasets/"
         self.db_file = os.path.join(self.path, 'data_bundle.csv')
 
+
         # -----------------------------
         # 1️⃣ Load or download data_bundle
         # -----------------------------
-        CACHE_PATH = Path('data/price_cache.parquet')
         self.settings = settings
         self.yf_data_bundle(tickers, start, end, add_days)
 
@@ -282,6 +283,7 @@ class Data:
 
         self.data_bundle = data_bundle
         return data_bundle
+
 
     def extended_data(self, data_dict, start):
         """
