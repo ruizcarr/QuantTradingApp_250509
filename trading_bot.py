@@ -33,7 +33,6 @@ def get_orders(settings):
     local_settings = copy.deepcopy(settings)
     local_settings['verbose'] = False
     local_settings['qstats'] = False
-    local_settings['trading_app_only'] = True
 
     data_ind = mdf.Data_Ind_Feed(local_settings).data_ind
     data, _ = data_ind
@@ -169,7 +168,7 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
 
     # Today Orders
     today_orders = orders_history[orders_history['date'] == today]
-    format_order_block(today_orders, f"<b>Today Orders</b>\n🕒 {today} 00:00")
+    format_order_block(today_orders, f"<b>Today Orders</b>\n🕒 {today} 06:00")
 
     lines.append("")
 
