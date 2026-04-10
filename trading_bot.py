@@ -7,6 +7,7 @@ import datetime
 import copy
 import pytz
 
+# Import Trading Settings
 from config.trading_settings import settings
 import Market_Data_Feed as mdf
 from Trading_Markowitz import compute, process_log_data
@@ -32,6 +33,7 @@ def get_orders(settings):
     local_settings = copy.deepcopy(settings)
     local_settings['verbose'] = False
     local_settings['qstats'] = False
+    local_settings['trading_app_only'] = True
 
     data_ind = mdf.Data_Ind_Feed(local_settings).data_ind
     data, _ = data_ind
