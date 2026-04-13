@@ -170,9 +170,6 @@ def get_Euribor_ind(Euribor_series):
     for col in Euribor_weights.columns:
         Euribor_ind[col] = (Euribor_metrics * Euribor_weights[col]).sum(axis=1)
 
-    #Keep yesterday value
-    Euribor_ind = Euribor_ind.shift(1)
-
     #Set index around 1
     Euribor_ind_mean=Euribor_ind.mean()
     Euribor_ind=1+(Euribor_ind/2.1-Euribor_ind_mean)
@@ -195,6 +192,9 @@ def get_Euribor_ind(Euribor_series):
 
 
     #print('Euribor_ind',Euribor_ind)
+
+    #Keep yesterday value
+    Euribor_ind = Euribor_ind.shift(1)
 
     return Euribor_ind
 

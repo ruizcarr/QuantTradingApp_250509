@@ -48,9 +48,9 @@ settings={
     'apply_pos_constraints': True, #including volatility limited factor to avoid volatility peacks
 
     #Markowitz Windows Parameters [fast,mid,slow]
-    'mkwtz_ws': [44,180,360],# Markowitz Lookback Window days [fast,mid,slow]
-    'mkwtz_mean_fs': [1,1,1],  # [0.9,1,1],factor to apply when mean of diferent windows weights[fast,mid,slow]
-    'mkwtz_ps':  ['W-FRI','W-FRI','M'], #Rebalance Period 'W-FRI','M','Q','Y' [fast,mid,slow]
+    'mkwtz_ws': [],# [44,180,360]Markowitz Lookback Window days [fast,mid,slow]
+    'mkwtz_mean_fs': [],  # [1,1,1],factor to apply when mean of diferent windows weights[fast,mid,slow]
+    'mkwtz_ps':  [], #['W-FRI','W-FRI','M'] Rebalance Period 'W-FRI','M','Q','Y' [fast,mid,slow]
 
     #Walk Forward Training & Test Parameters
     'train_length': 245 * 7,   #Lookback of data for training
@@ -113,7 +113,7 @@ settings={
     #'blend_metric': 'fixed',  # 'fixed'
 
 # Per-source fixed factors
-    'scipy_blend_factor': 0.0,
+    'scipy_blend_factor': 0.2,
     'vectorized_blend_factor': 0.35, #0.35
     'ddn_blend_factor': 0.65, #0.65
     'minmax_blend_factor': 0.15, #0.15
