@@ -219,15 +219,13 @@ class Data:
         self.data_bundle = data_bundle
         return data_bundle
 
-
-
     def yf_data_bundle(self, tickers, start, add_days=0, offline=False):
         tz = pytz.timezone("Europe/Madrid")
         today = datetime.now(tz).date()
-        yf_end = today + timedelta(days=1)  # end exclusive
+        yf_end = today + timedelta(days=1)
 
         if not self.settings.get('trading_app_only', False):
-            # ── TRAINING mode — full historical refresh ───────────────────────
+            # ── TRAINING mode — full historical refresh ───────────────────
             logger.info("TRAINING mode: full historical refresh from Yahoo")
             data_bundle = yf.download(
                 " ".join(tickers),
@@ -240,25 +238,26 @@ class Data:
 
             data_bundle.index = pd.to_datetime(data_bundle.index, utc=True).tz_convert(None)
             data_bundle = data_bundle.drop_duplicates()
-
-            # Save full fresh cache
             data_bundle.to_parquet(CACHE_PATH)
 
         else:
-            # ── TRADING mode — frozen history + rolling 5-day window ─────────
-            logger.info("TRADING mode: frozen history + last 5 days refresh")
-
+            # ── TRADING mode — frozen history + append from last cached day ─
             if not CACHE_PATH.exists():
-                raise FileNotFoundError("No cache found. Run in TRAINING mode first (trading_app_only=False).")
+                raise FileNotFoundError("No cache found. Run Training first.")
 
             cached = pd.read_parquet(CACHE_PATH)
+            last_cached_date = cached.index[-1]
             freeze_date = pd.Timestamp(today - timedelta(days=5))
-            frozen = cached[cached.index < freeze_date]
 
-            # Fetch only recent window
+            # Warn if cache is stale
+            days_stale = (pd.Timestamp(today) - last_cached_date).days
+            if days_stale > 30:
+                print(f"WARNING: Cache is {days_stale} days old. Consider running Training mode to refresh full history.")
+
+            # Fetch from last cached date — no arbitrary 5 day limit
             fresh_raw = yf.download(
                 " ".join(tickers),
-                start=freeze_date,
+                start=last_cached_date,
                 end=yf_end,
                 group_by="ticker",
                 progress=False,
@@ -268,16 +267,17 @@ class Data:
             fresh_raw.index = pd.to_datetime(fresh_raw.index, utc=True).tz_convert(None)
             fresh_raw = fresh_raw.drop_duplicates()
 
-            # ── Sanity check — warn if frozen history was revised ─────────────
-            overlap = frozen.index.intersection(fresh_raw.index)
-            if not overlap.empty:
-                diff = (frozen.loc[overlap] - fresh_raw.loc[overlap]).abs()
+            # ── Sanity check on last 5 days only ─────────────────────────
+            overlap = cached.index.intersection(fresh_raw.index)
+            recent_overlap = overlap[(overlap >= freeze_date) & (overlap < pd.Timestamp(today))]
+            if not recent_overlap.empty:
+                diff = (cached.loc[recent_overlap] - fresh_raw.loc[recent_overlap]).abs()
                 suspicious = diff[diff > 0.01].dropna(how='all')
                 if not suspicious.empty:
-                    logger.warning(f"Yahoo revised frozen history on: {suspicious.index.tolist()}")
+                    print(f"WARNING: Yahoo revised recent data on: {suspicious.index.tolist()}")
 
-            # Combine frozen + fresh
-            data_bundle = pd.concat([frozen, fresh_raw])
+            # Combine frozen history + fresh recent data
+            data_bundle = pd.concat([cached, fresh_raw])
             data_bundle = data_bundle[~data_bundle.index.duplicated(keep='last')]
             data_bundle.to_parquet(CACHE_PATH)
 
