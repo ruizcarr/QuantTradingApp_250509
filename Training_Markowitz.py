@@ -203,6 +203,7 @@ def process_log_data(log_history,settings):
 
     #End of day Portfolio data
     # Fix: subtract 6 hours before extracting date so 05:59 → previous day
+    # End of US Time Trading Day
     log_history['date'] = (log_history['date_time'] - pd.Timedelta(hours=6)).dt.date
     eod_log_history=log_history.drop_duplicates(subset='date', keep='last').set_index('date')[tickers+["portfolio_value","portfolio_value_eur","pos_value","ddn","exchange_rate" , "dayly_profit","dayly_profit_eur"]]
 

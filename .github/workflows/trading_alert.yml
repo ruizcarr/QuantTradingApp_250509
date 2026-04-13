@@ -2,14 +2,9 @@ name: Trading Alert
 
 on:
   schedule:
-    - cron: '0 5 * * 1-5'   # 07:00 CEST (summer UTC+2) Mon-Fri
-    - cron: '0 6 * * 1-5'   # 07:00 CET  (winter UTC+1) Mon-Fri
+    - cron: '0 5 * * 1-5'  # 00:00 ET (UTC-5 winter) = 06:00 Madrid CET
+                            # 01:00 ET (UTC-4 summer) = 07:00 Madrid CEST
   workflow_dispatch:
-    inputs:
-      force_run:
-        description: 'Skip time check (for testing)'
-        type: boolean
-        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -21,8 +16,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,34 +23,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Check Madrid time
-        id: time_check
-        run: |
-          python -c "
-          import datetime, pytz
-          force = '${{ github.event.inputs.force_run }}' == 'true'
-          tz = pytz.timezone('Europe/Madrid')
-          now = datetime.datetime.now(tz)
-          time_str = now.strftime('%H:%M')
-          print('Current Madrid time: ' + time_str)
-          if force or now.hour == 21:
-              print('Logic works properly. Sending message now.')
-              result = 'true'
-          else:
-              print('Logic works properly. Summer time trigger aborted.')
-              result = 'false'
-          import os
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write('should_run=' + result + '\n')
-          "
+        run: pip install -r requirements.txt
 
       - name: Run trading bot
-        if: steps.time_check.outputs.should_run == 'true'
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python trading_bot.py 2>&1
+        run: python trading_bot.py
