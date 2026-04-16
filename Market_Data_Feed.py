@@ -792,7 +792,7 @@ class Indicators:
         self.rsi = self.get_rsi(closes=tickers_returns,len=settings['rsi_w'],returns=True)
 
         #Get RSI Weights
-        self.rsi_reverse_keep_weights=self.rsi_reverse_keep(self.rsi, upp=settings['rsi_upp'],window=settings['rsi_window'])
+        self.rsi_reverse_keep_weights=self.rsi_reverse_keep(self.rsi, upp=settings['rsi_upp'],window=settings['rsi_keep_window'])
 
         # Get Data Normalized Weights
         data_norm=self.get_data_norm(cum_ret, window=252*2,min_periods=252)
@@ -869,7 +869,7 @@ class Indicators:
 
         return rsi_df
 
-    def rsi_reverse_keep(self,rsi, upp=70,  window=22,width=.5): #_sigmoid rsi_not_low# upp_v=0.25, low_v=1.25, k=1.50,
+    def rsi_reverse_keep(self,rsi, upp=70,  window=22,width=0.5): #_sigmoid rsi_not_low# upp_v=0.25, low_v=1.25, k=1.50,
 
         # Set rsi position with sigmoid function
         rsi_high =1 - sigmoid(x=rsi, center=upp,width=width)
@@ -946,248 +946,6 @@ class Indicators:
 
 
 
-# Expiration Functions
-
-def get_es_trading_calendar(returns,expiration_freq = 'Q'):
-    """
-    https://www.cmegroup.com/markets/equities/sp/micro-e-mini-sandp-500.contractSpecs.html
-    MICRO E-MINI S&P 500 INDEX FUTURES, Also Valid fo Nasdaq NQ=F
-    Quarterly contracts (Mar, Jun, Sep, Dec): q_months = [3, 6, 9, 12]
-    TERMINATION OF TRADING: Trading terminates at 9:30 a.m. ET on the 3rd Friday of the contract month.
-
-    :param returns:
-    :return: calendar
-    """
-
-    #Create Calendar Dates to update
-    start=returns.index[0]
-    end=returns.index[-1]
-
-    #Create a Calendar with all calendar data from Start to end of available tickers_returns
-    calendar=pd.DataFrame(index=pd.date_range(start,end),columns=['is_expire']).fillna(False)
-
-    #Add date of last data available
-    calendar['date_of_last_data']=returns.index.to_series().reindex(calendar.index).fillna(method='ffill')
-
-    #Add Month Expiration third friday of month
-    third_friday_index=pd.date_range(start=start, end=end, freq='WOM-3FRI')
-    #calendar['is_third_friday'].loc[third_friday_index]=True
-    calendar['is_third_friday']=calendar.index.isin(third_friday_index)
-
-    #Add quarterly Expiration
-    # Define quarterly months
-    q_months = [3, 6, 9, 12]
-    is_contract_month = calendar.index.month.isin(q_months)
-    calendar['is_q_third_friday']= calendar['is_third_friday'] & is_contract_month
-
-    #Bollean for Expiration as Calendar dates as per selected expiration frequencey
-    # Monhtly: 'M' or Quarterly: 'Q'
-    if expiration_freq=='Q':
-        is_calendar_exp=calendar['is_q_third_friday']
-    elif expiration_freq=='M':
-        is_calendar_exp = calendar['is_third_friday']
-
-    #Add Quarterly Expiration Dates with last date of available data
-    calendar['exp_date']=calendar['date_of_last_data'].loc[is_calendar_exp]
-
-    #Add is effective/real expiration date (previous date in case of market close)
-    calendar['is_expire'].loc[calendar['exp_date'].dropna()] = True
-
-    #Drop Rows not in returns df
-    calendar=calendar.reindex(returns.index)
-
-    # Keep only 'is_expire'
-    calendar = calendar[['is_expire']]  # 'day_exp_q',
-
-    # Add days to Expiration
-    calendar['days_to_exp'] = np.nan
-    i_range = [-4, -3, -2, -1, 0, 1, 2]
-    #i_range = [ -3, -2  ]
-    for i in i_range:
-        is_quarter_expire_i = calendar['is_expire'].shift(i).fillna(False)
-        index_quarter_expire_i = is_quarter_expire_i.loc[is_quarter_expire_i].index
-        calendar['days_to_exp'].loc[index_quarter_expire_i] = str(i)
-
-    return calendar
-
-def get_gc_trading_calendar(returns):
-    """
-    https://www.cmegroup.com/markets/metals/precious/e-micro-gold.contractSpecs.html
-    Micro Gold Futures and Options
-    TERMINATION OF TRADING:Trading terminates on the third last business day of the contract month.
-    contract_months = [2, 4, 6, 8, 10, 12]
-    :param tickers_returns:
-    :return:
-    df with expiration dates and more
-    """
-
-    #Create Calendar Dates
-    start=returns.index[0]
-    end=returns.index[-1]
-
-    #Create a Calendar with all calendar data from Start to end of available returns
-    calendar=pd.DataFrame(index=pd.date_range(start,end))
-
-    #Get Calendar End of Month
-    calendar['is_cal_end_of_month']=calendar.index.isin(calendar.resample('M').last().index)
-
-    #Add contract months
-    contract_months = [2, 4, 6, 8, 10, 12]
-    is_contract_month = calendar.index.month.isin(contract_months)
-    calendar['is_cal_end_of_contract_month'] = (calendar['is_cal_end_of_month'] & is_contract_month)
-
-    # Add date of last data available in returns df
-    calendar['date_of_last_data'] = returns.index.to_series().reindex(calendar.index).fillna(method='ffill')
-
-    #Add End of Month Contract in returns index
-    ret_end_of_contract_month =calendar['date_of_last_data'][calendar['is_cal_end_of_contract_month']]
-
-    #Get calendar index End of Month Contract in returns index
-    calendar['is_ret_end_of_contract_month']=calendar.index.isin(ret_end_of_contract_month)
-
-    #Drop Rows not in returns df
-    calendar=calendar.reindex(returns.index)
-
-    #Get Third previous available day
-    calendar['is_expire'] = calendar['is_ret_end_of_contract_month'].shift(-2)
-
-    #Drop auxiliar columns
-    calendar=calendar[['is_expire']]
-
-    # Add days to Expiration
-    calendar['days_to_exp'] = np.nan
-    i_range = [-4, -3, -2, -1, 0, 1, 2]
-    for i in i_range:
-        is_quarter_expire_i = calendar['is_expire'].shift(i).fillna(False)
-        index_quarter_expire_i = is_quarter_expire_i.loc[is_quarter_expire_i].index
-        calendar['days_to_exp'].loc[index_quarter_expire_i] = str(i)
-
-
-    return calendar
-
-
-def get_yearly_dict_rolling_bull_prob_around_expiration_dates(tickers_returns,calendar,tickers):
-
-    # Returns around expiration dates
-    dates_around_expiration_bool = ~calendar['days_to_exp'].isna()
-    ret_around_expiration = tickers_returns.loc[dates_around_expiration_bool]
-    #Add days to expiration for further use
-    ret_around_expiration['days_to_exp']=calendar['days_to_exp']
-    # Returns out of around expiration dates
-    ret_out_dates_around_exp = tickers_returns[~dates_around_expiration_bool]
-
-    #Create a dict with bull_prob_dict for all tickers and year end as key
-
-    #Ceate Years intervals for rolling
-    years = list(ret_around_expiration.index.year.unique())
-    y=10 #10
-    ends=[str(year) for year in years[y:]]
-    starts=[str(year) for year in years[:-y]]
-    ends_0=[str(year) for year in years[2:y]]
-    starts_0=[str(years[0]) for i in range(len(ends_0))]
-    starts=starts_0+starts
-    ends=ends_0+ends
-
-    #Rolling loop
-    bull_prob_dict={}
-    for start, end in zip(starts,ends):
-        slice_in=ret_around_expiration.loc[start:end]
-        slice_out = ret_out_dates_around_exp.loc[start:end]
-        slice_bull_prob_ret_around_expiration_by_day_exp = get_bull_prob_around_expiration_dates(slice_in, slice_out)
-        bull_prob_dict[end]=slice_bull_prob_ret_around_expiration_by_day_exp
-
-    #Extract rolling_bull_prob_weight_dict for each selected ticker trough the years from bull_prob_dict for all tickers with years as keys
-    rolling_bull_prob_weight_dict={}
-
-
-    for ticker in tickers:
-
-        ticker_rolling = pd.DataFrame()
-
-        for year,bull_prob_df in bull_prob_dict.items():
-            ticker_rolling[year] = bull_prob_df[ticker]
-
-        #p_value df for the ticker
-        ticker_p_value= ticker_rolling.T
-
-        # Compute Times Series Consistency-> easy to predict
-
-        # Create df for weight
-        ticker_rolling_bull_prob_weight = pd.DataFrame(index=ticker_p_value.index, columns=ticker_p_value.columns)
-
-        for m in ticker_p_value.columns:
-            ts=ticker_p_value[m].dropna()#.shift(1) #Avoid last year to keep out of sample
-            #Get Time Series Consistency
-            ts_is_consistent, r2_value, std, model = time_series_consistency(ts, std_lim=0.10, r2_lim=0.65)
-
-            if not ts_is_consistent:
-                ticker_rolling_bull_prob_weight[m]=1
-
-            else:
-
-                # Create Weight from predicted p_value
-
-                #Predicted p_value
-                predicted_p_value=model(range(len(ticker_p_value)))
-
-                if True:
-
-                    # Continous weight
-                    ticker_rolling_bull_prob_weight[m] = (predicted_p_value + 1) / 2 + 0.5
-
-                else:
-
-                    ##Discrete cut of p_value (weight is 1 when p_value > p_value_lim else 0)
-                    p_value_lim = 0.80  # 0.85
-                    ticker_rolling_bull_prob_weight[m]  = np.where(predicted_p_value > p_value_lim, 1.5,
-                                                np.where(predicted_p_value < -p_value_lim, 0.0001, 1))  # 0.0001 Avoid zero for further calc
-
-        #Clip Weights beetween 0.5-1.5
-        ticker_rolling_bull_prob_weight=ticker_rolling_bull_prob_weight.clip(upper=1.5,lower=0.5)
-
-        #print(ticker, ' ', ' ticker_rolling_bull_prob_weight\n', ticker_rolling_bull_prob_weight)
-
-        #Plot p-value & Weight
-        #ticker_p_value.plot(title=ticker + '  p_value')
-        #ticker_rolling_bull_prob_weight.plot(title=ticker + '  weight')
-
-        #Save weight to dict
-        rolling_bull_prob_weight_dict[ticker]=ticker_rolling_bull_prob_weight
-
-    return rolling_bull_prob_weight_dict
-
-def time_series_consistency(ts, std_lim=0.07, r2_lim=0.85): #
-    # R2 from Regresion
-    n_dimension = 3  # 1 for linear regresion, 2 for quadratic regresions,...
-    y_observed = ts
-    x_observed = range(len(y_observed))
-    model = np.poly1d(np.polyfit(x_observed, y_observed, n_dimension))
-    y_model = model(x_observed)
-    r2_value = r2_score(y_observed, y_model)
-
-    # Standard Deviation
-    std = ts.pct_change().fillna(0).std().item()
-
-    # Values with Low std bellow std_lim
-    low_std = std < std_lim
-
-    # Values with high R2 over r2_lim
-    high_r2 = r2_value > r2_lim
-
-    # Time-series is consistent when Std is Low or R2 is High
-    ts_is_consistent = (high_r2 | low_std)
-
-    #Plot
-    if False & ts_is_consistent:
-        plot_df = pd.DataFrame(index=ts.index)
-        plot_df['y_observed'] = ts
-        plot_df['y_model'] = model(range(len(ts)))
-        plot_df.plot(title=' R2=' + str(r2_value)[:4] + ' std=' + str(std)[:4] +
-                           'ts_is_consistent = ' + str(ts_is_consistent))
-
-    return ts_is_consistent, r2_value, std, model
-
-
 
 
 def get_np_cov_matrices(tickers_returns,len):
@@ -1205,29 +963,6 @@ def get_np_cov_matrices_from_df(cov_matrices_df):
 
     #Reshape as Matrix (n_days,n_assets,n_assets)
     np_cov_matrices = np_cov_matrices.reshape(int(l / n), n , n)
-
-    return np_cov_matrices
-
-
-
-def get_garch_var(returns):
-    returns=returns.fillna(0.0001)
-    garch_var=pd.DataFrame(index=returns.index)
-    np.random.seed(10)
-    for ticker in returns.columns:
-        ret=returns[ticker]
-        model = arch_model(ret, vol='ARCH', p=1)
-        #model = arch_model(ret)  # GARCH (with a Constant Mean)
-        model_fit = model.fit(disp=False)
-        forecast= model_fit.forecast(start=0)
-        garch_var[ticker]=forecast.variance*252
-
-    return garch_var
-
-def get_np_cov_matrices_replaced_diagonal_with_garch_var(tickers_returns, np_cov_matrices):
-    garch_var = get_garch_var(tickers_returns)
-    m, n, _ = np_cov_matrices.shape
-    np_cov_matrices[np.arange(m)[:, None], np.arange(n), np.arange(n)] = np.array(garch_var)
 
     return np_cov_matrices
 

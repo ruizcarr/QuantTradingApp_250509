@@ -61,7 +61,7 @@ settings={
     'rsi_upp': 65,  # 65 #100 means desactivated
     'rsi_low': 35,  # 35 #0 means desactivated
     'rsi_w': 14,  # 14
-    'rsi_window': 22,#22
+    'rsi_keep_window': 22,#22
 
     #Post Opt Parameters
     'apply_post_opt': True,  # Calculate Post Optimization and get post_factor
