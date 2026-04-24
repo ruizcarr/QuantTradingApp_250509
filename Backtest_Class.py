@@ -113,7 +113,7 @@ class Backtest:
 
             if window_counter >= self.settings.portfolio_window:
                 portfolio_to_invest = current_window_min
-                current_window_min = prev_port_usd
+                current_window_min = np.inf
                 window_counter = 0
 
             effective_pti = min(portfolio_to_invest, current_window_min, prev_port_usd)
