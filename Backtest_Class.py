@@ -81,10 +81,9 @@ class Backtest:
         portfolio_usd[0] = startcash_usd
         portfolio_eur[0] = startcash
 
-        # Fixed-window min tracking
-        window_counter = 0
-        current_window_min = startcash_usd
-        portfolio_to_invest = startcash_usd
+        # ── Monthly portfolio_to_invest tracking (pessimistic 20% buffer) ──
+        portfolio_to_invest = startcash_usd * 0.80  # Start with 20% buffer
+        last_month_updated = (trading_dates[0].year, trading_dates[0].month - 1)  # Force update on first iteration
 
         # Convert everything to numpy up front for speed
         ap = asset_price.values.astype(np.float64)
@@ -107,21 +106,19 @@ class Backtest:
             prev_port_usd = portfolio_usd[day - 1]
             prev_port_eur = portfolio_eur[day - 1]
 
-            # ── Fixed-window portfolio_to_invest ──────────────────────────
-            window_counter += 1
-            current_window_min = min(current_window_min, prev_port_usd)
+            current_date = trading_dates[day]
+            current_month = (current_date.year, current_date.month)
 
-            if window_counter >= self.settings.portfolio_window:
-                portfolio_to_invest = current_window_min
-                current_window_min = np.inf
-                window_counter = 0
+            # ── Update portfolio_to_invest on first trading day of new month ──
+            if current_month != last_month_updated:
+                    # New month detected! Use current portfolio minus 20% buffer
+                    portfolio_to_invest = prev_port_usd * 0.80
+                    last_month_updated = current_month
 
-            effective_pti = min(portfolio_to_invest, current_window_min, prev_port_usd)
-            effective_pti = max(effective_pti, 1.0)
-            pt_invest_arr[day] = effective_pti
+            pt_invest_arr[day] = portfolio_to_invest
 
             # ── Target size ───────────────────────────────────────────────
-            target_size_raw = wda[day] * effective_pti
+            target_size_raw = wda[day] * portfolio_to_invest
             mask_upgrade = (target_size_raw > self.settings.upgrade_threshold) & (target_size_raw < 2.0) #& upgrade_eligible
             target_size_raw = np.where(mask_upgrade, np.maximum(target_size_raw, 1.0), target_size_raw)
             target_size = np.round(target_size_raw).astype(np.int32)
@@ -131,7 +128,7 @@ class Backtest:
 
             # ── Exposition guard ──────────────────────────────────────────
             target_pos_value = (ap[day] * target_size).sum()
-            targeted_exposition = target_pos_value / effective_pti
+            targeted_exposition = target_pos_value / portfolio_to_invest
             exposition_ok = targeted_exposition < exposition_lim
 
             # ── Order logic ───────────────────────────────────────────────
@@ -176,7 +173,7 @@ class Backtest:
             daily_ret_usd[day] = day_ret_usd
             daily_ret_eur[day] = day_ret_eur
             pos_value_arr[day] = (ap[day] * new_pos).sum()
-            exposition_arr[day] = pos_value_arr[day] / effective_pti
+            exposition_arr[day] = pos_value_arr[day] / portfolio_to_invest
 
             # ── Cash Euribor Return ───────────────────────────────────────
             blocked_eur = 0.0
