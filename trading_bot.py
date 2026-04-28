@@ -206,13 +206,11 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
         lines.append(f"   💼 <b>Portfolio: {portfolio_info['portfolio_value_eur']:,.0f}€</b>")
         lines.append("")
 
-        d_icon = "🟢" if portfolio_info['daily_change_pct'] > 0 else "🔴"
-        lines.append(f"   {d_icon} Daily:   {portfolio_info['daily_change_pct']:+.2f}% | {portfolio_info['daily_change_eur']:+,.0f}€")
-
         prevd_icon = "🟢" if portfolio_info['prev_day_change_pct'] > 0 else "🔴"
-        lines.append(f"   {prevd_icon} Daily:   {portfolio_info['prev_day_change_pct']:+.2f}% | {portfolio_info['prev_day_change_eur']:+,.0f}€")
+        lines.append(f"   {prevd_icon} Yesterday:   {portfolio_info['prev_day_change_pct']:+.2f}% | {portfolio_info['prev_day_change_eur']:+,.0f}€")
 
-
+        d_icon = "🟢" if portfolio_info['daily_change_pct'] > 0 else "🔴"
+        lines.append(f"   {d_icon} Today:   {portfolio_info['daily_change_pct']:+.2f}% | {portfolio_info['daily_change_eur']:+,.0f}€")
 
         if portfolio_info['weekly_change_pct'] is not None:
             w_icon = "🟢" if portfolio_info['weekly_change_pct'] > 0 else "🔴"
