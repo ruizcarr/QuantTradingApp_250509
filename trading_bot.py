@@ -102,6 +102,10 @@ def get_orders(settings):
     daily_change_eur = portfolio_value_eur - prev_portfolio_eur
     daily_change_pct = daily_change_eur / prev_portfolio_eur * 100
 
+    prev_day_portfolio_eur = eod_today.iloc[-3]['portfolio_value_eur']
+    prev_day_change_eur = prev_portfolio_eur-prev_day_portfolio_eur
+    prev_day_change_pct = prev_day_change_eur / prev_day_portfolio_eur * 100
+
     weekly_eur    = eod_today.iloc[-6]['portfolio_value_eur']   if len(eod_today) >= 6   else None
     monthly_eur   = eod_today.iloc[-23]['portfolio_value_eur']  if len(eod_today) >= 23  else None
     yearly_eur    = eod_today.iloc[-253]['portfolio_value_eur'] if len(eod_today) >= 253 else None
@@ -119,6 +123,8 @@ def get_orders(settings):
         'portfolio_value_eur': portfolio_value_eur,
         'daily_change_pct':   daily_change_pct,
         'daily_change_eur':   daily_change_eur,
+        'prev_day_change_pct': prev_day_change_pct,
+        'prev_day_change_eur': prev_day_change_eur,
         'weekly_change_pct':  weekly_change_pct,
         'weekly_change_eur':  weekly_change_eur,
         'monthly_change_pct': monthly_change_pct,
@@ -202,6 +208,11 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
 
         d_icon = "🟢" if portfolio_info['daily_change_pct'] > 0 else "🔴"
         lines.append(f"   {d_icon} Daily:   {portfolio_info['daily_change_pct']:+.2f}% | {portfolio_info['daily_change_eur']:+,.0f}€")
+
+        prevd_icon = "🟢" if portfolio_info['prev_day_change_pct'] > 0 else "🔴"
+        lines.append(f"   {prevd_icon} Daily:   {portfolio_info['prev_day_change_pct']:+.2f}% | {portfolio_info['prev_change_eur']:+,.0f}€")
+
+
 
         if portfolio_info['weekly_change_pct'] is not None:
             w_icon = "🟢" if portfolio_info['weekly_change_pct'] > 0 else "🔴"

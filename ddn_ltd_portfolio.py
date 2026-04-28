@@ -88,8 +88,8 @@ class DDNLimitedPortfolio:
         cagr = tickers_ret.rolling(s['d_cagr_w']).mean() * 252
         cagr_fast=tickers_ret.rolling(22).mean() * 252
         fast_k=0.05
-        returns=((1-fast_k)*cagr+fast_k*cagr_fast)
-        self.utility = returns.clip(lower=0, upper=1)
+        returns=((1-fast_k)*cagr+fast_k*cagr_fast).clip(lower=0, upper=1)
+        self.utility = returns.copy()
 
         # How much faster is short-term vs long-term (ratio, not binary)
         momentum_ratio = (cagr_fast / cagr.replace(0, np.nan)).fillna(0.75).clip(0.75, 1.20)
