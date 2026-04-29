@@ -76,14 +76,6 @@ def compute_optimized_markowitz_d_w(tickers_returns, settings):
 
     return weights_df, metrics_df, rolling_metrics_dict, weekly_metrics_df, markowitz_metrics_dicts
 
-def compute_optimized_markowitz(tickers_returns, settings):
-    # Compute Markowitz Looping  over Selected Parameter
-    weights_df, returns_p, metrics_df, rolling_metrics_dict = compute_markowitz_loop_over_ps(tickers_returns, settings)
-
-    # Optimization by Utility Up factor
-    weights_df, metrics_df, rolling_metrics_dict, returns_p = compute_utility_factor(settings['apply_utility_factor'],tickers_returns, weights_df, metrics_df, rolling_metrics_dict, returns_p)
-
-    return weights_df, metrics_df, rolling_metrics_dict,returns_p
 
 
 def compute_markowitz_loop_over_ps(tickers_ret,xs,settings,strat_period='dayly'):
@@ -151,7 +143,7 @@ def compute_markowitz_loop_over_ps(tickers_ret,xs,settings,strat_period='dayly')
 
     #Combined Strategy
 
-    mean= True
+    mean= False
 
     if mean:
         # Simple mean of p Strategies
@@ -160,12 +152,12 @@ def compute_markowitz_loop_over_ps(tickers_ret,xs,settings,strat_period='dayly')
     else:
 
         #Apply Markowitz to get optimal Startegy
-        weight_lim, weight_sum_lim,cagr_w   =0.35, 1.2, 250*10
+        weight_lim, weight_sum_lim,cagr_w   =0.35, 1.05, 250*2 #0.35, 1.05, 250*2-> sharpe=1.88
         weights_comb_array, weights_by_strategy_df = get_combined_strategy_by_markowitz(returns_p, weights_p_array, volat_target, weight_lim, weight_sum_lim, cagr_w, strat_period)
 
-        plot_df = weights_by_strategy_df.copy()
-        plot_df['sum'] = plot_df.sum(axis=1)
-        plot_df.plot(title='weights_by_strategy_df')
+        #plot_df = weights_by_strategy_df.copy()
+        #plot_df['sum'] = plot_df.sum(axis=1)
+        #plot_df.plot(title='weights_by_strategy_df')
 
 
     #Weights Array to df
