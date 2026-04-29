@@ -183,7 +183,7 @@ def format_orders_message(log_history, exchange_rate, cash_info, positions_info,
     if len(orders_ahead) > 0:
         next_day = orders_ahead['date'].iloc[0]
         next_orders = orders_ahead[orders_ahead['date'] == next_day]
-        format_order_block(next_orders, f"<b>Upcoming Orders Forecast</b>\n🕒 {next_day} 00:00")
+        format_order_block(next_orders, f"<b>Upcoming Orders Forecast</b>\n🕒 {next_day} 06:00")
     else:
         lines.append("<b>Upcoming Orders</b>\nNo upcoming orders.")
 
