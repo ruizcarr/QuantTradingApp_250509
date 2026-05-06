@@ -812,8 +812,6 @@ class Indicators:
         # Combined Weights
         self.comb_weights =   self.rsi_reverse_keep_weights *self.Euribor_ind *self.norm_sharpe_weights*self.ddn_weight_ts
 
-        if 'cash' in tickers_returns.columns:
-            self.comb_weights =self.comb_weights.copy()
 
         # Softed Factor
         raw_weight_pct =settings['raw_weight_pct']
@@ -823,7 +821,7 @@ class Indicators:
         if 'cash' in self.comb_weights.columns:
             self.comb_weights['cash'] = self.Euribor_ind['cash']
 
-        tickers_exceptions=['EURUSD=X'] #,'BTC-USD'
+        tickers_exceptions=['EURUSD=X','GC=F','BTC-USD'] #
         for ticker in tickers_exceptions:
             if ticker in self.comb_weights.columns:
                 self.comb_weights[ticker] = 1
