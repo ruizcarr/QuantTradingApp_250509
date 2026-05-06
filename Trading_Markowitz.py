@@ -82,7 +82,7 @@ def compute(settings,data_ind):
             weekago= pd.Timestamp.today().normalize() - pd.Timedelta(days=7)
             two_weekago = pd.Timestamp.today().normalize() - pd.Timedelta(days=14)
             one_monthago = pd.Timestamp.today().normalize() - pd.Timedelta(days=30)
-            print("log_history\n", log_history[log_history["date_time"]>=one_monthago])
+            print("log_history\n", log_history[log_history["date_time"]>=two_weekago])
 
             #print("log_history head\n", log_history.head(60))
 

@@ -805,8 +805,12 @@ class Indicators:
         Euribor_series = cash_returns['cash'] * 255 * 100
         self.Euribor_ind = get_Euribor_ind(Euribor_series)
 
+        # Compute DDN Weights Time Series
+        from Dip_Buy_Study import compute_ddn_weight_ts
+        self.ddn_weight_ts = compute_ddn_weight_ts(tickers_returns, study=True)
+
         # Combined Weights
-        self.comb_weights =   self.rsi_reverse_keep_weights *self.Euribor_ind *self.norm_sharpe_weights
+        self.comb_weights =   self.rsi_reverse_keep_weights *self.Euribor_ind *self.norm_sharpe_weights*self.ddn_weight_ts
 
         if 'cash' in tickers_returns.columns:
             self.comb_weights =self.comb_weights.copy()

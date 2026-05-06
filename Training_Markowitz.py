@@ -137,12 +137,16 @@ def run(settings):
     full_path = os.path.join(folder_name, csv_filename)  # Creates the correct path for your OS
     #Save log_history to csv
     log_history.to_csv(full_path, index=False)
+    # Save eod_log_history to csv
+    csv_filename2 = 'training_eod_log_history.csv'
+    full_path2 = os.path.join(folder_name, csv_filename2)
+    eod_log_history.to_csv(full_path2)
 
     # Save positions to csv
     csv_filename = 'training_positions.csv'
-    full_path = os.path.join(folder_name, csv_filename)  # Creates the correct path for your OS
+    full_path3 = os.path.join(folder_name, csv_filename)  # Creates the correct path for your OS
     # Save log_history to csv
-    positions.to_csv(full_path) #, index=False
+    positions.to_csv(full_path3)
 
     # endregion & TRADING
 
