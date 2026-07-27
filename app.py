@@ -63,6 +63,11 @@ def main(settings):
         if "last_refresh" not in st.session_state:
             st.session_state["last_refresh"] = pd.Timestamp.now(tz="Europe/Madrid").strftime('%Y-%m-%d %H:%M')
 
+        # Clear cache once per session to force fresh data on app start
+        if "cache_cleared_on_start" not in st.session_state:
+            load_and_compute_data.clear()
+            st.session_state["cache_cleared_on_start"] = True
+
         #Debug
         #st.write("Before Load & Compute: settings end last date", settings["end"])
 
