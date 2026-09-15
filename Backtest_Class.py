@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
@@ -7,12 +7,6 @@ import logging
 import os
 
 logger = logging.getLogger(__name__)
-
-# ── Margin Rules ──────────────────────────────────────────────────────────────
-ETF_TICKERS = ['NQ=F', 'ES=F', 'GC=F']
-ETF_CONTRACTS_LIMIT = 2 #2
-MARGIN_RATE = 0.10
-MIN_EURIBOR = 0.001
 
 
 @dataclass
@@ -23,6 +17,10 @@ class BacktestSettings:
     buy_at_market: bool = False
     portfolio_window: int = 22 * 12
     min_periods: int = 22
+    ETF_TICKERS: list[str] = field(default_factory=lambda: ['NQ=F', 'ES=F', 'GC=F'])
+    ETF_CONTRACTS_LIMIT: int = 2  # 2
+    MARGIN_RATE: float = 0.10
+    MIN_EURIBOR: float = 0.001
 
 
 
@@ -55,6 +53,11 @@ class Backtest:
             swan_stop_price: pd.DataFrame = None,
     ) -> Tuple[pd.DataFrame, pd.Series, Dict]:
         """Execute backtest day by day. No circular dependency possible."""
+
+        ETF_TICKERS = self.settings.ETF_TICKERS
+        ETF_CONTRACTS_LIMIT = self.settings.ETF_CONTRACTS_LIMIT
+        MARGIN_RATE = self.settings.MARGIN_RATE
+        MIN_EURIBOR = self.settings.MIN_EURIBOR
 
         tickers = weights.columns
         tickers_list = list(tickers)
@@ -296,7 +299,8 @@ def compute_backtest(
     positions, data_dict, opens, highs, lows, closes = sanitize_dataset(positions, data_dict)
 
     # Get settings values
-    mults_array, startcash, exposition_lim, commision, max_n_contracts = get_settings_values(settings, positions.columns)
+    mults_array, startcash, exposition_lim, commision, max_n_contracts,pass_settings = get_settings_values(settings, positions.columns)
+
 
     # ── Separate cash from futures ────────────────────────────────────────
     futures_tickers = [t for t in positions.columns if t != 'cash']
@@ -335,7 +339,11 @@ def compute_backtest(
     backtest_settings = BacktestSettings(
         upgrade_threshold=settings.get('upgrade_threshold', 0.20),
         commision=commision,
-        buy_at_market=settings.get('buy_at_market', False)
+        buy_at_market=settings.get('buy_at_market', False),
+        ETF_TICKERS=settings.get('ETF_TICKERS'),
+        ETF_CONTRACTS_LIMIT=settings.get('ETF_CONTRACTS_LIMIT'),
+        MARGIN_RATE=settings.get('MARGIN_RATE'),
+        MIN_EURIBOR=settings.get('MIN_EURIBOR')
     )
     backtest = Backtest(backtest_settings)
 
@@ -410,7 +418,10 @@ def get_settings_values(settings, tickers):
     commision       = settings['commision']
     max_n_contracts = settings['max_n_contracts']
 
-    return mults_array, startcash, exposition_lim, commision, max_n_contracts
+    pass_settings=settings.copy()
+
+
+    return mults_array, startcash, exposition_lim, commision, max_n_contracts,pass_settings
 
 
 def compute_out_of_backtest_loop(closes, weights, mults):
@@ -611,6 +622,8 @@ def plot_portfolio_composition(bt_log_dict, closes, exchange_rate, settings):
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
 
+
+
     # Get EOD positions and portfolio value
     pos = bt_log_dict['pos']
     portfolio_eur = bt_log_dict['portfolio_value_eur']
@@ -631,6 +644,10 @@ def plot_portfolio_composition(bt_log_dict, closes, exchange_rate, settings):
     ticker_eur = ticker_eur.reindex(portfolio_eur.index).fillna(0)
 
     # Compute blocked_eur over time
+    ETF_TICKERS = settings['ETF_TICKERS']
+    ETF_CONTRACTS_LIMIT = settings['ETF_CONTRACTS_LIMIT']
+    MARGIN_RATE = settings['MARGIN_RATE']
+
     blocked_eur = pd.Series(0.0, index=pos.index)
     for ticker in futures_tickers:
         if ticker not in closes.columns or ticker not in settings['mults']:

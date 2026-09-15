@@ -26,7 +26,7 @@ import time
 import random
 
 from Interest_Rates_Download import get_euribor_1y_daily
-from utils import sigmoid
+from utils import sigmoid,compute_daily_adjusted_bounds,plot_bounds_and_cagr
 
 # Wider print limits
 pd.set_option('display.max_columns', None)
@@ -52,6 +52,24 @@ class Data_Ind_Feed:
 
         #Get Indicators Instance
         self.ind=Indicators(self.data,settings)
+
+         # --- NEW: Compute CAGR-adjusted bounds once, over full history, add as an indicator ---
+        lower_bounds_df, upper_bounds_df, rolling_cagr_df = compute_daily_adjusted_bounds(
+             tickers_returns=self.data.tickers_returns,
+             tickers_bounds=settings['tickers_bounds'],
+             lookback_days=settings.get('cagr_bounds_lookback', 252),
+             mode=settings.get('cagr_bounds_mode', 'hard'),
+             cagr_min=settings.get('cagr_bounds_min', 0.0),
+            )
+
+        self.ind.indicators_dict['cagr_lower_bounds'] = lower_bounds_df
+        self.ind.indicators_dict['cagr_upper_bounds'] = upper_bounds_df
+        self.ind.indicators_dict['cagr_rolling'] = rolling_cagr_df
+
+        plot_bounds_and_cagr(lower_bounds_df, upper_bounds_df, rolling_cagr_df, settings['tickers_bounds'],
+                              cagr_min=settings.get('cagr_bounds_min', 0.0))
+        # --- END NEW ---
+
 
         #Get Data , Indicators Dict tuple
         self.data_ind=(self.data,self.ind.indicators_dict)

@@ -25,7 +25,15 @@ warnings.warn = lambda *a, **kw: False
 
 #FUNCTIONS
 
-def compute_optimized_markowitz_d_w(tickers_returns, settings):
+def compute_optimized_markowitz_d_w(tickers_returns, settings, upper_bounds_df=None):
+    """
+    upper_bounds_df: optional DataFrame (n_days, n_tickers), daily CAGR-adjusted upper
+        bounds (e.g. from compute_daily_adjusted_bounds / the 'cagr_upper_bounds' indicator).
+        When provided, candidates in xs that allocate more than that day's bound to any
+        ticker are excluded from selection for that day (opt_fun forced to +inf), on top
+        of the static tickers_bounds already baked into xs generation below.
+        When None, behavior is unchanged from before (no daily masking).
+    """
 
     # Weights Combination xs
     tickers_bounds = {ticker: settings['tickers_bounds'][ticker] for ticker in tickers_returns.columns}
@@ -37,10 +45,10 @@ def compute_optimized_markowitz_d_w(tickers_returns, settings):
     xs = generate_xs_combinations(tickers_bounds, weight_sum_lim, step=0.10) #0.10
 
     # Compute Dayly Markowitz Looping  over Selected Parameter
-    dayly_weights_df, d_returns, returns_p,metrics_df, rolling_metrics_dict,markowitz_metrics_dicts = compute_markowitz_loop_over_ps(tickers_returns,xs, settings,strat_period='dayly')
+    dayly_weights_df, d_returns, returns_p,metrics_df, rolling_metrics_dict,markowitz_metrics_dicts = compute_markowitz_loop_over_ps(tickers_returns,xs, settings,strat_period='dayly', upper_bounds_df=upper_bounds_df)
 
     #Compute Weekly Markowitz
-    weekly_weights_df, w_returns, weekly_metrics_df, weekly_rolling_metrics_dict,w_k=compute_weekly_markowitz(tickers_returns,xs, settings,strat_period='weekly')
+    weekly_weights_df, w_returns, weekly_metrics_df, weekly_rolling_metrics_dict,w_k=compute_weekly_markowitz(tickers_returns,xs, settings,strat_period='weekly', upper_bounds_df=upper_bounds_df)
 
    #Weighed Mean Dayly / Weekly
 
@@ -78,7 +86,7 @@ def compute_optimized_markowitz_d_w(tickers_returns, settings):
 
 
 
-def compute_markowitz_loop_over_ps(tickers_ret,xs,settings,strat_period='dayly'):
+def compute_markowitz_loop_over_ps(tickers_ret,xs,settings,strat_period='dayly', upper_bounds_df=None):
 
     #Compute markowitz metrics invariant by p parameter loop
 
@@ -102,7 +110,7 @@ def compute_markowitz_loop_over_ps(tickers_ret,xs,settings,strat_period='dayly')
     tickers_ret = tickers_ret - np.array(contango_list) / 100 / 252
 
     #Get Markowitz Metrics
-    markowitz_metrics_dict=compute_markowitz_cov_metrics(tickers_ret,xs,cov_w,volat_target,strat_period)
+    markowitz_metrics_dict=compute_markowitz_cov_metrics(tickers_ret,xs,cov_w,volat_target,strat_period, upper_bounds_df=upper_bounds_df)
 
     #Initialize df and dict to store loop resuts
     weights_p_df = pd.DataFrame(index=tickers_ret.index)
@@ -263,7 +271,14 @@ def limit_xs_diff(xs, max_diff=0.1):
     xs = xs[np.all(np.abs(diffs) <= max_diff, axis=1)]
     return xs
 
-def compute_markowitz_cov_metrics(returns,xs,cov_w,volat_target,strat_period):
+def compute_markowitz_cov_metrics(returns,xs,cov_w,volat_target,strat_period, upper_bounds_df=None):
+    """
+    upper_bounds_df: optional DataFrame (n_days, n_tickers) aligned (or alignable) to
+        `returns`'s index/columns, e.g. the daily CAGR-adjusted upper bounds indicator.
+        When provided, it's reindexed to `returns.index` and stored in the metrics dict
+        as 'upper_bounds' (np.array, n_days x n_tickers) for use by
+        compute_mkwtz_vectorized_local to mask out-of-bound candidates per day.
+    """
     if strat_period=='dayly':  year,week=252,5
     elif strat_period=='weekly': year,week=53,1
     else: print('strat_period not defined')
@@ -313,6 +328,13 @@ def compute_markowitz_cov_metrics(returns,xs,cov_w,volat_target,strat_period):
         'penalties_xs': penalties_xs,
           }
 
+    # Align daily/weekly CAGR-adjusted upper bounds to this returns index, if provided
+    if upper_bounds_df is not None:
+        aligned_upper_bounds_df = upper_bounds_df.reindex(returns.index)[returns.columns]
+        dict['upper_bounds'] = np.array(aligned_upper_bounds_df)
+    else:
+        dict['upper_bounds'] = None
+
     return dict
 
 def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
@@ -334,7 +356,11 @@ def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
 
         #Normalize values
         # Normalized Metrics Clip (0,1)
+        # 'upper_bounds' is excluded: it's a raw per-day bound array (possibly None) used
+        # directly for masking in compute_mkwtz_vectorized_local, not a metric to normalize.
         for key in list(dict.keys()):
+            if key == 'upper_bounds':
+                continue
             dict[key + "_norm"] = np.clip(dict[key], 0.0001, 1)
 
         dict['cagr_xs_norm'] = minmax_normalize(np.clip(dict['cagr_xs'], -1, 1))  # value -1 to 1
@@ -348,7 +374,6 @@ def update_markowitz_cagr_metrics(cagr_w, dict,strat_period='dayly'):
         dict['risk_xs_norm'] = weighted_mean_of_dfs_dict(dfs_dict, weights_list)
 
         dict['opt_fun_xs'] = dict['risk_xs_norm'] - dict['cagr_xs_norm'] + dict['penalties_xs_norm']
-
 
     else:
 
@@ -436,9 +461,28 @@ def compute_mkwtz_vectorized_local(markowitz_data_dict, metrics=True):
         [markowitz_data_dict[k] for k in
          ['returns','xs','volatility_xs', 'cagr_xs', 'opt_fun_xs']]
 
+    upper_bounds = markowitz_data_dict.get('upper_bounds', None)
+
+    if upper_bounds is not None:
+        # Per-day mask: exclude any xs candidate that allocates more than that day's
+        # CAGR-adjusted upper bound to ANY ticker. xs: (n_combos, n_tickers),
+        # upper_bounds: (n_days, n_tickers) -> violation: (n_days, n_combos)
+        violation = np.any(xs[None, :, :] > upper_bounds[:, None, :], axis=2)
+
+        # Safety fallback: if a day has zero valid candidates (all masked out),
+        # don't force all-cash here -- fall back to the unmasked opt_fun for that day.
+        # (xs already includes the all-zero / low-weight candidate under normal static
+        # bounds, so this should be rare, but this guards against edge cases.)
+        day_all_excluded = violation.all(axis=1)
+        opt_fun_xs_masked = np.where(violation, np.inf, opt_fun_xs)
+        opt_fun_xs_masked[day_all_excluded] = opt_fun_xs[day_all_excluded]
+
+        opt_fun_xs_for_argmin = opt_fun_xs_masked
+    else:
+        opt_fun_xs_for_argmin = opt_fun_xs
 
     # Localize index of xs where opt_fun is minimum
-    opt_fun_min_idx_xs = np.argmin(opt_fun_xs, axis=1)
+    opt_fun_min_idx_xs = np.argmin(opt_fun_xs_for_argmin, axis=1)
 
     # Get weights of this minimum
     weights = xs[opt_fun_min_idx_xs]
@@ -465,10 +509,6 @@ def compute_mkwtz_vectorized_local(markowitz_data_dict, metrics=True):
         metrics_opt_df = None
 
     return weights_df, metrics_opt_df, metrics_xs_dict
-
-
-
-
 
 
 def get_returns_metrics(returns,strat_period='dayly'):
@@ -570,15 +610,23 @@ def get_strategy_metrics(weights, tickers_returns, strat_period):
 
     return strategy_returns, metrics, rolling_metrics
 
-def compute_weekly_markowitz(tickers_returns,xs, settings,strat_period):
+def compute_weekly_markowitz(tickers_returns,xs, settings,strat_period, upper_bounds_df=None):
 
     if 'weekly' in settings['strat_periods']:
 
         #Get weekly data considering fridays holidays
         weekly_returns = tickers_returns.resample('W-FRI').sum()
 
+        # Resample daily upper bounds to weekly (take Friday's / last available value in the week),
+        # so the per-day bound-masking logic applies consistently at the weekly cadence too.
+        if upper_bounds_df is not None:
+            weekly_upper_bounds_df = upper_bounds_df.resample('W-FRI').last()
+            weekly_upper_bounds_df = weekly_upper_bounds_df.reindex(weekly_returns.index).fillna(method='ffill')
+        else:
+            weekly_upper_bounds_df = None
+
         # Compute Weekly Markowitz Looping  over Selected Parameter
-        weekly_weights_df, w_returns, weekly_returns_p , weekly_metrics_df, weekly_rolling_metrics_dict,w_markowitz_metrics_dicts= compute_markowitz_loop_over_ps(weekly_returns,xs, settings,strat_period)
+        weekly_weights_df, w_returns, weekly_returns_p , weekly_metrics_df, weekly_rolling_metrics_dict,w_markowitz_metrics_dicts= compute_markowitz_loop_over_ps(weekly_returns,xs, settings,strat_period, upper_bounds_df=weekly_upper_bounds_df)
 
         # Upsample to dayly with values of previous Friday
         weekly_weights_df = weekly_weights_df.reindex(tickers_returns.index).shift(1).fillna(method='ffill').fillna(0)

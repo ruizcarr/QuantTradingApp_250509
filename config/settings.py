@@ -21,7 +21,13 @@ settings={
     #Settings for Portfolio Optimization
     #'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.02),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.3)}, #
     'tickers_bounds': {'ES=F': (-0.0, 0.0), 'NQ=F': (-0, 0.5), 'GC=F': (0.00, 0.5), 'CL=F': (0, 0.1), 'EURUSD=X': (-0.00, 0.00),'BTC-USD': (0.0, 0.075),  'cash': (0.0, 0.0)}, #
-    'volatility_target': 0.11,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115
+    'volatility_target': 0.11,#0.110,  #0.113, # 0.135, #0.124,  # 0.125,  # 0.135,  # 0.24#0.115º
+
+    #CAGR-adjusted bounds
+    'cagr_bounds_lookback': 252, #252
+    'cagr_bounds_mode': 'hard', #'hard' #'soft'
+    'cagr_bounds_min': 0.0,
+
 
     #Settings for Cash Back Test
     'do_BT': True,
@@ -48,9 +54,10 @@ settings={
     'apply_pos_constraints': True, #including volatility limited factor to avoid volatility peacks
 
     #Markowitz Windows Parameters [fast,mid,slow]
-    'mkwtz_ws': [],# [44,180,360]Markowitz Lookback Window days [fast,mid,slow]
-    'mkwtz_mean_fs': [],  # [1,1,1],factor to apply when mean of diferent windows weights[fast,mid,slow]
-    'mkwtz_ps':  [], #['W-FRI','W-FRI','M'] Rebalance Period 'W-FRI','M','Q','Y' [fast,mid,slow]
+    'mkwtz_ws': [44,180,360], #Markowitz Lookback Window days [fast,mid,slow]
+    'mkwtz_mean_fs': [1,1,1],#factor to apply when mean of diferent windows weights[fast,mid,slow]
+    'mkwtz_ps':  ['W-FRI','W-FRI','M'] ,# Rebalance Period 'W-FRI','M','Q','Y' [fast,mid,slow]
+
 
     #Walk Forward Training & Test Parameters
     'train_length': 245 * 7,   #Lookback of data for training

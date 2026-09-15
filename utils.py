@@ -1,6 +1,6 @@
 import numpy as np
-
 import pandas as pd
+import matplotlib.pyplot as plt
 
 def weighted_mean_of_dfs_dict(dfs_dict, weights_list):
   """Calculates the weighted mean of multiple DataFrames.
@@ -221,3 +221,111 @@ def equi_volatility_strategies_weights_sum(strategies_weights_dict, tickers_retu
         weights_comb_df = weights_comb_df + w_df * strategies_equi_volat_factor[key]
 
     return weights_comb_df, strategies_equi_volat_factor
+
+def compute_daily_adjusted_bounds(tickers_returns, tickers_bounds,
+                                    lookback_days=252, mode='hard', cagr_min=0.0,
+                                    soft_floor=0.3, cagr_cap_margin=0.20):
+    """
+    Vectorized computation of per-day, per-asset adjusted upper bounds based on
+    trailing rolling CAGR. Shifted by 1 day to avoid lookahead: bounds used on
+    day T are based only on returns through day T-1.
+
+    Args:
+        tickers_returns: DataFrame (n_days, n_tickers) of daily returns.
+        tickers_bounds: dict {ticker: (lower, upper)} original static bounds.
+        lookback_days: trailing window size (trading days) for rolling CAGR.
+        mode: 'hard' -> zero upper bound where rolling CAGR <= cagr_min.
+              'soft' -> scale upper bound proportionally to CAGR strength.
+        cagr_min: threshold CAGR below which asset is excluded/reduced.
+        soft_floor: minimum retained fraction of upper bound in 'soft' mode.
+        cagr_cap_margin: in 'soft' mode, CAGR above (cagr_min + cagr_cap_margin)
+                          gets full (factor=1.0) upper bound.
+
+    Returns:
+        lower_df: DataFrame (n_days, n_tickers), static lower bounds broadcast daily.
+        upper_df: DataFrame (n_days, n_tickers), adjusted upper bounds per day.
+        rolling_cagr_df: DataFrame (n_days, n_tickers), the shifted rolling CAGR
+                          used to compute the adjustment (for inspection/debugging).
+    """
+    tickers = list(tickers_bounds.keys())
+    tickers_returns = tickers_returns[tickers]  # ensure consistent column order
+
+    # Rolling trailing CAGR, then SHIFT by 1 day: today's bounds use data through yesterday
+    rolling_cagr_df = (tickers_returns.rolling(window=lookback_days).mean() * 252).shift(1)
+
+    lower_arr = np.array([tickers_bounds[t][0] for t in tickers])
+    upper_arr = np.array([tickers_bounds[t][1] for t in tickers])
+
+    if mode == 'hard':
+        pass_mask = (rolling_cagr_df > cagr_min)          # False where NaN too (warm-up period)
+        upper_df = pass_mask.astype(float) * upper_arr    # broadcasts (n_days, n_tickers) * (n_tickers,)
+
+    elif mode == 'soft':
+        cap = cagr_min + cagr_cap_margin
+        factor_df = soft_floor + (1 - soft_floor) * \
+                    ((rolling_cagr_df - cagr_min) / (cap - cagr_min)).clip(lower=0, upper=1)
+        below_or_nan = rolling_cagr_df.isna() | (rolling_cagr_df <= cagr_min)
+        factor_df = factor_df.where(~below_or_nan, soft_floor)
+        factor_df = factor_df.where(rolling_cagr_df.notna(), 0.0)  # fully exclude during warm-up
+        upper_df = factor_df * upper_arr
+
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
+    lower_df = pd.DataFrame(
+        np.tile(lower_arr, (len(tickers_returns), 1)),
+        index=tickers_returns.index, columns=tickers
+    )
+    upper_df.columns = tickers
+    upper_df.index = tickers_returns.index
+
+    return lower_df, upper_df, rolling_cagr_df
+
+
+
+def plot_bounds_and_cagr(lower_df, upper_df, rolling_cagr_df, tickers_bounds, cagr_min=0.0, ncols=2):
+    """
+    Plot rolling CAGR and CAGR-adjusted upper bound per ticker, one subplot each.
+
+    Args:
+        lower_df, upper_df: outputs from compute_daily_adjusted_bounds.
+        rolling_cagr_df: output from compute_daily_adjusted_bounds (shifted rolling CAGR).
+        tickers_bounds: original static {ticker: (lower, upper)} dict, for reference line.
+        cagr_min: threshold used when computing bounds, drawn as a horizontal reference line.
+        ncols: number of subplot columns.
+    """
+    tickers = list(tickers_bounds.keys())
+    n = len(tickers)
+    nrows = int(np.ceil(n / ncols))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(7 * ncols, 3.5 * nrows), squeeze=False)
+    axes = axes.flatten()
+
+    for i, ticker in enumerate(tickers):
+        ax1 = axes[i]
+        orig_upper = tickers_bounds[ticker][1]
+
+        # CAGR on left axis
+        ax1.plot(rolling_cagr_df.index, rolling_cagr_df[ticker], color='tab:blue', label='Rolling CAGR')
+        ax1.axhline(cagr_min, color='tab:blue', linestyle='--', linewidth=0.8, alpha=0.6, label=f'CAGR min ({cagr_min})')
+        ax1.set_ylabel('CAGR', color='tab:blue')
+        ax1.tick_params(axis='y', labelcolor='tab:blue')
+        ax1.set_title(ticker)
+
+        # Adjusted upper bound on right axis
+        ax2 = ax1.twinx()
+        ax2.plot(upper_df.index, upper_df[ticker], color='tab:orange', label='Adjusted upper bound')
+        ax2.axhline(orig_upper, color='tab:orange', linestyle='--', linewidth=0.8, alpha=0.6, label=f'Original upper ({orig_upper})')
+        ax2.set_ylabel('Upper bound', color='tab:orange')
+        ax2.tick_params(axis='y', labelcolor='tab:orange')
+
+        # Combined legend
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=8)
+
+    # Hide unused subplots if tickers count doesn't fill the grid
+    for j in range(n, len(axes)):
+        axes[j].axis('off')
+
+    plt.tight_layout()

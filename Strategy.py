@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from Markowitz_Vectorized import compute_optimized_markowitz_d_w,get_combined_strategy_by_markowitz
-from utils import weighted_mean_of_dfs_dict, create_results_by_period_df,mean_positions
+from utils import weighted_mean_of_dfs_dict, create_results_by_period_df, compute_daily_adjusted_bounds,plot_bounds_and_cagr
 from MarkowitzWeights import MarkowitzWeights
 
 
@@ -99,14 +99,26 @@ class Strategy:
             print("Error at settings: Any Optimize Strategy must be selected 'mkwtz_scipy' or/and 'mkwtz_vectorized' or 'ddn_ltd_portfolio'")
             return
 
+        # Pull precomputed bounds, sliced to this walk-forward window's dates
+        lower_bounds_df = indicators_dict['cagr_lower_bounds'].reindex(st_tickers_returns.index)
+        upper_bounds_df = indicators_dict['cagr_upper_bounds'].reindex(st_tickers_returns.index)
+
+        # --- END NEW ---
+
         sources = {}  # name -> (weights_df, fixed_factor)
 
         if settings['mkwtz_scipy']:
-            self.s_weights_df = self.PortfolioWeightsMarkowitzScipy(st_tickers_returns, indicators_dict, settings)
+            self.s_weights_df = self.PortfolioWeightsMarkowitzScipy(st_tickers_returns, indicators_dict, settings,
+                                                                    lower_bounds_df, upper_bounds_df  # NEW args
+                                                                    )
             sources['scipy'] = (self.s_weights_df, settings.get('scipy_blend_factor', 1.0))
 
         if settings['mkwtz_vectorized']:
-            self.v_weights_df, *_ = compute_optimized_markowitz_d_w(st_tickers_returns, settings)
+            v_upper_bounds_df = None
+            if 'cagr_upper_bounds' in indicators_dict:
+                v_upper_bounds_df = indicators_dict['cagr_upper_bounds'].reindex(st_tickers_returns.index)
+
+            self.v_weights_df, *_ = compute_optimized_markowitz_d_w(st_tickers_returns, settings, upper_bounds_df=v_upper_bounds_df)
             sources['vectorized'] = (self.v_weights_df, settings.get('vectorized_blend_factor', 1.0))
 
         if settings['ddn_ltd_portfolio']:
@@ -151,11 +163,20 @@ class Strategy:
 
 
 
-    def PortfolioWeightsMarkowitzScipy(self,st_tickers_returns,indicators_dict,settings):
+    #def PortfolioWeightsMarkowitzScipy(self,st_tickers_returns,indicators_dict,settings):
 
         #Compute Markowitz for diferent windows and save instance to a dict
+        #self.tsw_dict = {
+        #    str(w): RollingMarkowitzWeights(w, p, settings['volatility_target'], st_tickers_returns,indicators_dict, settings)
+        #    for w, p in zip(settings['mkwtz_ws'], settings['mkwtz_ps'])
+        #}
+
+    def PortfolioWeightsMarkowitzScipy(self, st_tickers_returns, indicators_dict, settings,
+                                       lower_bounds_df, upper_bounds_df):
+
         self.tsw_dict = {
-            str(w): RollingMarkowitzWeights(w, p, settings['volatility_target'], st_tickers_returns,indicators_dict, settings)
+            str(w): RollingMarkowitzWeights(w, p, settings['volatility_target'], st_tickers_returns,
+                                            indicators_dict, settings, lower_bounds_df, upper_bounds_df)
             for w, p in zip(settings['mkwtz_ws'], settings['mkwtz_ps'])
         }
 
@@ -200,7 +221,8 @@ class Strategy:
                 fun_df = None
                 opt_fun_predict_factor = None
 
-            # Make weightged Mean
+
+              # Make weightged Mean
             weights_df = weighted_mean_of_dfs_dict(weights_dict, mkwtz_mean_fs)
 
             #weights_df = sum([df * weight for df, weight in zip(weights_dict.values(), mkwtz_mean_fs)])/ len(mkwtz_mean_fs)
@@ -209,6 +231,7 @@ class Strategy:
             weights_df *=overall_f
 
             return weights_df, opt_fun_predict_factor, fun_df, weights_dict
+
 
         #Get weightged Mean with opt_fun Predictibity factor
         self.weights_df, self.opt_fun_predict_factor, self.opt_fun_df,self.weights_by_period_dict= (
@@ -240,7 +263,7 @@ class Strategy:
         return self.st_strategy_returns_by_ticker.sum(axis=1)
 
 
-class RollingMarkowitzWeights:
+class RollingMarkowitzWeights_OK:
     """
     Compute MarkowitzWeigths to get Dayly Weights pd.Dataframe with columns= Tickers Names
 
@@ -325,6 +348,112 @@ class RollingMarkowitzWeights:
         self.opt_fun_df = results_dayly_df[['opt_fun']]
 
         #print('self.weights_df at compute_RollingMarkowitzWeights',self.weights_df)
+
+class RollingMarkowitzWeights:
+    """
+    Compute MarkowitzWeigths to get Dayly Weights pd.Dataframe with columns= Tickers Names
+
+    """
+    def __init__(self, lookback, rebalance_p, volatility_target, tickers_returns, indicators_dict, settings,
+                 lower_bounds_df, upper_bounds_df):
+        self.rebalance_p = rebalance_p
+        self.lookback = int(lookback)
+        self.volatility_target = volatility_target
+        self.settings = settings
+        self.tickers_returns = tickers_returns
+        self.tickers = tickers_returns.columns
+        self.size = len(self.tickers)
+        self.indicators_dict = indicators_dict
+
+        # Precomputed daily CAGR-adjusted bounds, shared across all windows/methods
+        self.lower_bounds_df = lower_bounds_df
+        self.upper_bounds_df = upper_bounds_df
+
+        self.compute_RollingMarkowitzWeights()
+
+    def compute_RollingMarkowitzWeights(self):
+        """
+        Calculates time series of optimal weights and optimization function values.
+
+        This function iterates through periods defined by the `rebalance_p` frequency,
+        calculates optimal weights for each period using the Markowitz model, and
+        upsamples the results to daily frequency.
+
+        For each rebalance period, the CAGR-adjusted bounds (precomputed upstream,
+        using only trailing/shifted data to avoid lookahead) are looked up for that
+        period's end date and passed into MarkowitzWeights as an override of
+        settings['tickers_bounds'].
+
+        Attributes:
+            self.rebalance_p: Rebalance frequency (e.g., 'W-FRI' for weekly Fridays,'M').
+            self.lookback: Lookback window for calculating weights.  (eg. int 44,180,360 )
+            self.tickers_returns: DataFrame containing historical asset returns.
+            self.volatility_target: Target volatility for the portfolio.
+            self.settings: Additional settings for the Markowitz model.
+            self.indicators_dict: (Optional) Dictionary of technical indicators.
+            self.lower_bounds_df: DataFrame (n_days, n_tickers) of daily lower bounds.
+            self.upper_bounds_df: DataFrame (n_days, n_tickers) of daily CAGR-adjusted upper bounds.
+            self.weights_df: DataFrame containing daily weights for each asset.
+            self.opt_fun_df: DataFrame containing daily optimization function values.
+            self.size: Number of assets.
+        """
+
+        #Create df to store results
+        results_by_period_df = create_results_by_period_df(self.tickers_returns, self.rebalance_p, self.lookback)
+
+        # IMPORTANT: Clear the 'Memory' of the class for a clean run
+        MarkowitzWeights.reset_state()
+
+        x0 = np.ones(self.size) / self.size * 0.1
+
+        def get_results_by_loop(results_by_period_df, x0):
+
+            for index, row in results_by_period_df.iterrows():
+                slice_tickers_returns = self.tickers_returns.loc[row['start']:row['end']]
+
+                # --- Look up this period's CAGR-adjusted bounds ---
+                period_end = row['end']
+                if period_end in self.upper_bounds_df.index:
+                    day_upper = self.upper_bounds_df.loc[period_end]
+                    day_lower = self.lower_bounds_df.loc[period_end]
+                else:
+                    # Fallback: nearest available prior date (handles non-trading-day rebalance dates)
+                    valid_idx = self.upper_bounds_df.index[self.upper_bounds_df.index <= period_end]
+                    if len(valid_idx) == 0:
+                        # No data yet (before warm-up) -> fully excluded bounds
+                        day_upper = pd.Series(0.0, index=self.tickers)
+                        day_lower = pd.Series(0.0, index=self.tickers)
+                    else:
+                        nearest_idx = valid_idx[-1]
+                        day_upper = self.upper_bounds_df.loc[nearest_idx]
+                        day_lower = self.lower_bounds_df.loc[nearest_idx]
+
+                period_bounds = {t: (day_lower[t], day_upper[t]) for t in self.tickers}
+                # --- End bounds lookup ---
+
+                #Calculate Slice Weights, overriding tickers_bounds with this period's adjusted bounds
+                mw = MarkowitzWeights(
+                    slice_tickers_returns,
+                    self.volatility_target,
+                    {**self.settings, 'tickers_bounds': period_bounds},
+                    x0
+                )
+                results_by_period_df.loc[index, ['opt_fun'] + self.tickers.tolist()] = [mw.results.fun] + list(mw.results.x)
+
+            return results_by_period_df
+
+        results_by_period_df = get_results_by_loop(results_by_period_df, x0)
+
+        #Drop Duplicates
+        results_by_period_df.drop_duplicates(subset='end', inplace=True)
+
+        # Upsample to daily index and fill missing values
+        results_by_period_df.set_index('end', inplace=True)
+        results_dayly_df = results_by_period_df.reindex(self.tickers_returns.index).shift(1).fillna(method='ffill')
+
+        # Separate weight and opt_fun DataFrames
+        self.weights_df = results_dayly_df[self.tickers]
+        self.opt_fun_df = results_dayly_df[['opt_fun']]
 
 
 

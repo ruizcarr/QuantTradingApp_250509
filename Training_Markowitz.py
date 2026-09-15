@@ -56,7 +56,7 @@ def run(settings):
 
     # Get Trained Optimized Parameters
     wft = WalkForwardTraining(data_ind, settings) #Get wft Instance
-    print('tt_windows\n', wft.tt_windows)
+    if settings['verbose']: print('tt_windows\n', wft.tt_windows)
     params_train = wft.get_params_train(data_ind, settings)
 
     # Save settings as training_settings to make sure same settings are used at trading
@@ -64,10 +64,7 @@ def run(settings):
 
     end = time.time()
     times['training'] =  round(end - start,3)
-
-    if settings['verbose']:
-        print('Training Ok',times['training'])
-
+    if settings['verbose']: print('Training Ok',times['training'])
 
     #BACKTEST & TRADING
 

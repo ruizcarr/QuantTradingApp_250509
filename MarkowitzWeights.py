@@ -72,7 +72,7 @@ class MarkowitzWeights:
         except:
             return 0
 
-    def compute_portfolio_OK(self, x0, tickers_bounds, volatility_target=None):
+    def compute_portfolio_NOK(self, x0, tickers_bounds, volatility_target=None):
         w_sum_max = self.settings.get('w_sum_max', 1.0)
 
         # Fixed Constraints for SLSQP
@@ -113,7 +113,8 @@ class MarkowitzWeights:
 
         # MASK: Force upper bound to 0 where CAGR is not positive
         # This is the "Positive CAGR only" filter
-        mask = self.CAGR > 0.001
+        CAGR_treshold= 0.001 #0.001
+        mask = self.CAGR > CAGR_treshold
         uppers = np.where(mask, uppers, 0.0)
 
         # Reformat for SLSQP (list of tuples)
@@ -125,7 +126,7 @@ class MarkowitzWeights:
         # Safety: If all assets are masked out, adj_x0 stays 0 (Cash position)
         # If some are positive, ensure we have a valid starting sum
         total_start_w = np.sum(adj_x0)
-        if total_start_w == 0 and np.any(mask):
+        if np.isclose(total_start_w, 0.0) and np.any(mask):
             adj_x0 = mask.astype(float) / np.sum(mask)
 
         # --- OPTIMIZATION ---
